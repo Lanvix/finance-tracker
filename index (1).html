@@ -1,0 +1,682 @@
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10141a">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<script>
+  if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
+    window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(()=>{}); });
+  }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+  :root{
+    --bg: #10141a; --panel: #171d26; --panel-hi: #1e2632; --line: #2a3341;
+    --text: #e8e6e0; --text-dim: #8b93a0;
+    --amber: #d9a054; --amber-dim: #6b5535;
+    --sage: #8fb996; --sage-dim: #3f5844;
+    --clay: #c1666b; --clay-dim: #5c3235;
+    --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
+    --sans: 'Space Grotesk', 'Segoe UI', sans-serif;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); }
+  #app-root {
+    background: var(--bg); color: var(--text); font-family: var(--sans);
+    min-height: 100vh; max-width: 480px; margin: 0 auto; padding-bottom: 84px; position: relative;
+  }
+  .header { padding: 20px 18px 14px; border-bottom: 1px solid var(--line); }
+  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; }
+  .h1 { font-size: 22px; font-weight: 600; margin: 0 0 14px 0; letter-spacing: -0.01em; }
+  .runway { font-family: var(--mono); font-size: 13px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
+  .runway-top { display:flex; justify-content: space-between; color: var(--text-dim); margin-bottom: 8px; font-size: 11px; letter-spacing: 0.06em;}
+  .runway-bar { font-size: 15px; letter-spacing: -1px; white-space: nowrap; overflow: hidden; color: var(--amber); }
+  .runway-stats { display:flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text-dim); }
+  .runway-stats b { color: var(--text); font-weight: 500; }
+  .runway-date { text-align:center; margin-top: 8px; font-size: 12px; color: var(--sage); }
+
+  .tabs { display: flex; position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: var(--panel); border-top: 1px solid var(--line); z-index: 20; }
+  .tab { flex: 1; text-align: center; padding: 12px 0 10px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--text-dim); cursor: pointer; border-top: 2px solid transparent; text-transform: uppercase; }
+  .tab.active { color: var(--amber); border-top: 2px solid var(--amber); }
+  .tab:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+
+  .view { padding: 16px 18px 8px; }
+  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--text-dim); text-transform: uppercase; margin: 18px 0 8px; display: flex; justify-content: space-between; align-items: center; }
+  .section-label:first-child { margin-top: 0; }
+
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 13px 14px; margin-bottom: 10px; }
+  .card.cleared { opacity: 0.55; }
+  .card-row { display: flex; justify-content: space-between; align-items: baseline; }
+  .card-name { font-weight: 500; font-size: 14.5px; }
+  .card-meta { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 3px; }
+  .card-amount { font-family: var(--mono); font-size: 15px; font-weight: 500; }
+  .badge { font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
+  .badge.priority { background: var(--amber-dim); color: var(--amber); }
+  .badge.ok { background: var(--sage-dim); color: var(--sage); }
+  .badge.over { background: var(--clay-dim); color: var(--clay); }
+  .badge.done { background: var(--sage-dim); color: var(--sage); }
+
+  .bar-track { height: 5px; background: var(--line); border-radius: 3px; margin-top: 8px; overflow: hidden; }
+  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
+  @media (prefers-reduced-motion: reduce){ .bar-fill{ transition:none; } }
+
+  .mini-btn { background: transparent; border: 1px solid var(--line); color: var(--text-dim); font-family: var(--mono); font-size: 11px; padding: 4px 9px; border-radius: 5px; cursor: pointer; }
+  .mini-btn:hover { border-color: var(--amber); color: var(--amber); }
+  .mini-btn.accent { border-color: var(--amber-dim); color: var(--amber); }
+
+  .add-form { background: var(--panel-hi); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-top: 8px; display: none; }
+  .add-form.open { display: block; }
+  .field { margin-bottom: 10px; }
+  .field label { display:block; font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px; }
+  .field input, .field select { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text); padding: 9px 10px; border-radius: 6px; font-family: var(--sans); font-size: 14px; }
+  .row2 { display: flex; gap: 8px; }
+  .row2 .field { flex: 1; }
+
+  .btn { width: 100%; background: var(--amber); color: #10141a; border: none; padding: 10px 0; border-radius: 6px; font-weight: 600; font-size: 13.5px; cursor: pointer; font-family: var(--sans); }
+  .btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--text-dim); margin-top: 6px; }
+
+  .empty-state { font-family: var(--mono); font-size: 12px; color: var(--text-dim); padding: 20px 0; text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
+  .plus { background: var(--panel); border: 1px solid var(--line); color: var(--amber); width: 100%; padding: 9px 0; border-radius: 8px; font-family: var(--mono); font-size: 12px; cursor: pointer; letter-spacing: 0.04em; margin-top: 4px; }
+
+  .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 13px; }
+  .stat-label { font-family: var(--mono); font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+  .stat-value { font-family: var(--mono); font-size: 18px; margin-top: 5px; }
+
+  .strategy-toggle { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-bottom: 10px; }
+  .strategy-toggle button { flex: 1; background: transparent; border: none; color: var(--text-dim); font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; padding: 9px 0; cursor: pointer; text-transform: uppercase; }
+  .strategy-toggle button.active { background: var(--amber-dim); color: var(--amber); }
+
+  .proj-hero { text-align: center; padding: 6px 0 10px; }
+  .proj-date { font-family: var(--mono); font-size: 26px; color: var(--sage); letter-spacing: -0.02em; }
+  .proj-sub { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 4px; }
+  .proj-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
+  .proj-cell { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
+  .proj-cell b { display: block; color: var(--text); font-size: 13px; margin-top: 2px; font-weight: 500; }
+  .chart-wrap { margin-top: 12px; }
+  .chart-wrap svg { width: 100%; height: 90px; display: block; }
+
+  .milestones { display: flex; justify-content: space-between; margin-top: 10px; font-family: var(--mono); font-size: 10px; }
+  .milestone { color: var(--line); text-align: center; flex: 1; }
+  .milestone.hit { color: var(--sage); }
+
+  .celebrate { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(16,20,26,0.88); z-index: 50; text-align: center; padding: 30px; }
+  .celebrate.show { display: flex; }
+  .celebrate-inner { font-family: var(--mono); }
+  .celebrate-big { font-size: 42px; }
+  .celebrate-title { font-size: 19px; color: var(--sage); margin-top: 14px; font-family: var(--sans); font-weight: 600; }
+  .celebrate-sub { font-size: 12px; color: var(--text-dim); margin-top: 8px; line-height: 1.6; }
+
+  .save-note { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); text-align:center; margin-top: 14px; opacity: 0.7; }
+  ::placeholder { color: #4a5364; }
+  textarea { resize: vertical; }
+</style>
+
+<div id="app-root">
+  <div class="header">
+    <div class="eyebrow">// finances</div>
+    <div class="h1">Runway <span id="storage-badge" class="badge over" style="display:none; vertical-align:middle; font-weight:400;"></span></div>
+    <div class="runway">
+      <div class="runway-top"><span>DEBT CLEARED</span><span id="runway-pct">0%</span></div>
+      <div class="runway-bar" id="runway-bar">[--------------------]</div>
+      <div class="runway-stats">
+        <span>Owed: <b id="runway-owed">£0</b></span>
+        <span>Cleared: <b id="runway-cleared">£0</b></span>
+      </div>
+      <div class="runway-date" id="runway-date" style="display:none"></div>
+    </div>
+  </div>
+
+  <div class="tabs">
+    <div class="tab active" data-view="overview">Overview</div>
+    <div class="tab" data-view="debts">Debts</div>
+    <div class="tab" data-view="budget">Budget</div>
+  </div>
+
+  <div class="view" id="view-overview"></div>
+  <div class="view" id="view-debts" style="display:none"></div>
+  <div class="view" id="view-budget" style="display:none"></div>
+
+  <div class="celebrate" id="celebrate" role="dialog">
+    <div class="celebrate-inner">
+      <div class="celebrate-big">[█████]</div>
+      <div class="celebrate-title" id="celebrate-title">Debt cleared</div>
+      <div class="celebrate-sub" id="celebrate-sub"></div>
+      <button class="btn" style="margin-top:18px; padding:10px 30px; width:auto" id="celebrate-close">Keep going</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const STORE_KEY = 'finance-tracker-state-v1';
+  let state = { debts: [], budgetIncome: 0, categories: [], strategy: 'avalanche', extraPayment: 0 };
+  let loaded = false, storageOk = null, warnedOnce = false;
+  let editingIndex = null;
+
+  function migrate(s){
+    s.debts = (s.debts||[]).map(d => ({ payments: [], promoEnd: null, postPromoApr: null, ...d }));
+    s.categories = s.categories||[];
+    s.strategy = s.strategy || 'avalanche';
+    s.extraPayment = Number(s.extraPayment)||0;
+    s.budgetIncome = Number(s.budgetIncome)||0;
+    return s;
+  }
+
+  async function load(){
+    try {
+      if (window.storage && window.storage.get){
+        const res = await window.storage.get(STORE_KEY, false);
+        if (res && res.value) { state = migrate(JSON.parse(res.value)); storageOk = true; }
+      } else {
+        const raw = localStorage.getItem(STORE_KEY);
+        if (raw) { state = migrate(JSON.parse(raw)); storageOk = true; }
+      }
+    } catch(e) { /* fresh start */ }
+    loaded = true;
+    renderAll();
+  }
+  async function save(){
+    const payload = JSON.stringify(state);
+    try {
+      if (window.storage && window.storage.set){
+        await window.storage.set(STORE_KEY, payload, false);
+        const check = await window.storage.get(STORE_KEY, false);
+        storageOk = !!(check && check.value === payload);
+      } else {
+        localStorage.setItem(STORE_KEY, payload);
+        storageOk = localStorage.getItem(STORE_KEY) === payload;
+      }
+    } catch(e) {
+      storageOk = false;
+      if (!warnedOnce) { console.warn('Auto-save unavailable — use Backup on Overview.'); warnedOnce = true; }
+    }
+    updateStorageBadge();
+  }
+  function updateStorageBadge(){
+    const el = document.getElementById('storage-badge');
+    if (!el) return;
+    if (storageOk === false){ el.style.display = 'inline-block'; el.textContent = 'auto-save off — use backup'; }
+    else { el.style.display = 'none'; }
+  }
+
+  const fmt = n => '£' + Number(n||0).toLocaleString('en-GB', {maximumFractionDigits:0});
+  const fmt2 = n => '£' + Number(n||0).toLocaleString('en-GB', {minimumFractionDigits:2, maximumFractionDigits:2});
+  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthLabel = (offset) => { const d = new Date(); d.setMonth(d.getMonth()+offset); return MONTHS[d.getMonth()] + ' ' + d.getFullYear(); };
+  const escapeHtml = s => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  const activeDebts = () => state.debts.filter(d => Number(d.balance) > 0);
+
+  // ---------- PAYOFF SIMULATION ----------
+  // Rate-aware: 0% promos flip to their post-promo APR when the promo end date passes.
+  function effApr(d, when){
+    if (d.promoEnd && when < new Date(d.promoEnd)) return Number(d.apr)||0;
+    if (d.promoEnd) return (d.postPromoApr != null && d.postPromoApr !== '') ? Number(d.postPromoApr) : Number(d.apr)||0;
+    return Number(d.apr)||0;
+  }
+  function simulate(strategy, extra){
+    const src = activeDebts();
+    if (!src.length) return null;
+    const ds = src.map(d => ({ ...d, bal: Number(d.balance) }));
+    const totalBudget = src.reduce((s,d)=>s+Number(d.minPayment||0),0) + extra;
+    const start = new Date(); start.setDate(1);
+    let month = 0, totalInterest = 0;
+    const series = [ds.reduce((s,d)=>s+d.bal,0)];
+    const payoffs = {};
+    while (ds.some(d=>d.bal>0.005) && month < 600){
+      month++;
+      const cur = new Date(start.getFullYear(), start.getMonth()+month, 1);
+      ds.forEach(d => {
+        if (d.bal<=0) return;
+        const i = d.bal * (effApr(d, cur)/100/12);
+        d.bal += i; totalInterest += i;
+      });
+      let remaining = totalBudget;
+      ds.forEach(d => { if (d.bal>0){ const p = Math.min(Number(d.minPayment||0), d.bal); d.bal -= p; remaining -= p; } });
+      const order = ds.filter(d=>d.bal>0).sort(strategy==='avalanche'
+        ? (a,b)=> effApr(b,cur)-effApr(a,cur) || a.bal-b.bal
+        : (a,b)=> a.bal-b.bal);
+      for (const d of order){
+        if (remaining <= 0) break;
+        const p = Math.min(remaining, d.bal);
+        d.bal -= p; remaining -= p;
+      }
+      ds.forEach(d => { if (d.bal <= 0.005 && payoffs[d.name] === undefined){ payoffs[d.name] = month; d.bal = 0; } });
+      series.push(ds.reduce((s,d)=>s+d.bal,0));
+    }
+    return { months: month, totalInterest, series, payoffs, finished: !ds.some(d=>d.bal>0.005) };
+  }
+
+  function sparkline(series){
+    if (!series || series.length < 2) return '';
+    const w = 400, h = 90, pad = 4;
+    const max = Math.max(...series), n = series.length;
+    const step = Math.max(1, Math.floor(n / 120));
+    let pts = [];
+    for (let i = 0; i < n; i += step){
+      const x = pad + (i/(n-1)) * (w - pad*2);
+      const y = h - pad - (series[i]/max) * (h - pad*2);
+      pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+    }
+    const last = series[n-1];
+    const lx = pad + (w - pad*2), ly = h - pad - (last/max)*(h - pad*2);
+    pts.push(lx.toFixed(1) + ',' + ly.toFixed(1));
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="Projected balance over time">
+      <polyline points="${pts.join(' ')}" fill="none" stroke="#d9a054" stroke-width="2"/>
+      <line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="#2a3341" stroke-width="1"/>
+    </svg>`;
+  }
+
+  // ---------- TABS ----------
+  document.querySelectorAll('.tab').forEach(t=>{
+    t.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
+      t.classList.add('active');
+      ['overview','debts','budget'].forEach(v=>{
+        document.getElementById('view-'+v).style.display = (v===t.dataset.view)?'block':'none';
+      });
+    });
+  });
+
+  // ---------- CELEBRATION ----------
+  document.getElementById('celebrate-close').onclick = ()=> document.getElementById('celebrate').classList.remove('show');
+  function celebrate(name){
+    const act = activeDebts().length;
+    document.getElementById('celebrate-title').textContent = escapeHtml(name) + ' — cleared';
+    document.getElementById('celebrate-sub').textContent = act === 0
+      ? 'That was the last one. You are debt-free.'
+      : act + ' debt' + (act>1?'s':'') + ' left. Its minimum payment now rolls into your attack.';
+    document.getElementById('celebrate').classList.add('show');
+  }
+
+  // ---------- RUNWAY ----------
+  function renderRunway(){
+    const totalOwed = state.debts.reduce((s,d)=>s+Number(d.balance||0),0);
+    const totalOriginal = state.debts.reduce((s,d)=>s+Number(d.original||d.balance||0),0);
+    const cleared = Math.max(totalOriginal - totalOwed, 0);
+    const pct = totalOriginal > 0 ? Math.round((cleared/totalOriginal)*100) : 0;
+    const blocks = 20, filled = Math.round((pct/100)*blocks);
+    let bar = '[';
+    for(let i=0;i<blocks;i++) bar += (i<filled) ? '█' : '░';
+    bar += ']';
+    document.getElementById('runway-bar').textContent = bar;
+    document.getElementById('runway-pct').textContent = pct + '%';
+    document.getElementById('runway-owed').textContent = fmt(totalOwed);
+    document.getElementById('runway-cleared').textContent = fmt(cleared);
+    const sim = simulate(state.strategy, state.extraPayment);
+    const dateEl = document.getElementById('runway-date');
+    if (sim && sim.finished){
+      dateEl.style.display = 'block';
+      dateEl.textContent = '→ debt-free ' + monthLabel(sim.months);
+    } else { dateEl.style.display = 'none'; }
+  }
+
+  // ---------- OVERVIEW ----------
+  function renderOverview(){
+    const el = document.getElementById('view-overview');
+    const totalOwed = state.debts.reduce((s,d)=>s+Number(d.balance||0),0);
+    const totalMin = activeDebts().reduce((s,d)=>s+Number(d.minPayment||0),0);
+    const totalAllocated = state.categories.reduce((s,c)=>s+Number(c.allocated||0),0);
+    const totalSpent = state.categories.reduce((s,c)=>s+Number(c.spent||0),0);
+    const leftover = Number(state.budgetIncome||0) - totalAllocated;
+
+    // Projections: chosen strategy, the other strategy, and minimums-only baseline
+    const simMain = simulate(state.strategy, state.extraPayment);
+    const other = state.strategy === 'avalanche' ? 'snowball' : 'avalanche';
+    const simOther = simulate(other, state.extraPayment);
+    const simBase = simulate(state.strategy, 0);
+
+    let projHtml = '<div class="empty-state">Add debts to see your payoff projection</div>';
+    if (simMain){
+      const saved = (simBase && simBase.finished && simMain.finished) ? simBase.totalInterest - simMain.totalInterest : null;
+      const fasterMonths = (simBase && simBase.finished && simMain.finished) ? simBase.months - simMain.months : null;
+      const otherDiff = (simOther && simOther.finished && simMain.finished) ? simOther.totalInterest - simMain.totalInterest : null;
+      projHtml = `
+      <div class="card">
+        <div class="strategy-toggle" role="tablist">
+          <button id="strat-aval" class="${state.strategy==='avalanche'?'active':''}">Avalanche · rate first</button>
+          <button id="strat-snow" class="${state.strategy==='snowball'?'active':''}">Snowball · smallest first</button>
+        </div>
+        <div class="proj-hero">
+          ${simMain.finished
+            ? `<div class="proj-date">${monthLabel(simMain.months)}</div>
+               <div class="proj-sub">debt-free in ${simMain.months} months · ${fmt(simMain.totalInterest)} total interest</div>`
+            : `<div class="proj-date" style="color:var(--clay)">never</div>
+               <div class="proj-sub">current payments don't outrun the interest — add extra below</div>`}
+        </div>
+        <div class="field" style="margin-bottom:6px">
+          <label>Extra toward debt each month (£)</label>
+          <input id="extra-input" type="number" inputmode="decimal" value="${state.extraPayment||''}" placeholder="0"/>
+        </div>
+        <div class="proj-compare">
+          ${fasterMonths != null && state.extraPayment > 0 ? `<div class="proj-cell">vs minimums only<b>${fasterMonths} months sooner</b></div>` : ''}
+          ${saved != null && saved > 0.5 ? `<div class="proj-cell">interest saved<b>${fmt(saved)}</b></div>` : ''}
+          ${otherDiff != null && Math.abs(otherDiff) > 0.5 ? `<div class="proj-cell">${other} would cost<b style="color:${otherDiff>0?'var(--clay)':'var(--sage)'}">${otherDiff>0?'+':''}${fmt(otherDiff)}</b></div>` : ''}
+          ${simMain.finished ? `<div class="proj-cell">total to pay<b>${fmt(totalOwed + simMain.totalInterest)}</b></div>` : ''}
+        </div>
+        <div class="chart-wrap">${sparkline(simMain.series)}</div>
+        <div class="milestones">
+          ${[25,50,75,100].map(m=>{
+            const totalOriginal = state.debts.reduce((s,d)=>s+Number(d.original||d.balance||0),0);
+            const clearedPct = totalOriginal>0 ? ((totalOriginal-totalOwed)/totalOriginal)*100 : 0;
+            return `<div class="milestone ${clearedPct>=m?'hit':''}">${clearedPct>=m?'●':'○'} ${m}%</div>`;
+          }).join('')}
+        </div>
+      </div>`;
+    }
+
+    el.innerHTML = `
+      <div class="section-label">Payoff plan</div>
+      ${projHtml}
+      <div class="section-label">Snapshot</div>
+      <div class="overview-grid">
+        <div class="stat"><div class="stat-label">Total owed</div><div class="stat-value">${fmt(totalOwed)}</div></div>
+        <div class="stat"><div class="stat-label">Min payments/mo</div><div class="stat-value">${fmt(totalMin)}</div></div>
+        <div class="stat"><div class="stat-label">Budgeted/mo</div><div class="stat-value">${fmt(totalAllocated)}</div></div>
+        <div class="stat"><div class="stat-label">Left after budget</div><div class="stat-value" style="color:${leftover<0?'var(--clay)':'var(--sage)'}">${fmt(leftover)}</div></div>
+      </div>
+      <div class="section-label">Backup &amp; import</div>
+      <div class="card">
+        <div class="card-meta" style="margin-bottom:10px; margin-top:0;">Copy your data out as text, restore it later, or import debts &amp; budget categories from a spreadsheet (.xlsx / .csv). Everything stays on this device.</div>
+        <div class="row2">
+          <button class="mini-btn" id="backup-copy" style="flex:1; padding:8px 0;">copy backup</button>
+          <button class="mini-btn" id="backup-restore" style="flex:1; padding:8px 0;">restore</button>
+          <button class="mini-btn" id="import-excel" style="flex:1; padding:8px 0;">import sheet</button>
+        </div>
+        <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" style="display:none"/>
+        <textarea id="backup-box" placeholder="Backup text appears here / paste here to restore" style="display:none; width:100%; margin-top:10px; background:var(--bg); border:1px solid var(--line); color:var(--text); border-radius:6px; font-family:var(--mono); font-size:11px; padding:8px; min-height:70px;"></textarea>
+        <div id="backup-msg" class="card-meta" style="margin-top:8px; display:none;"></div>
+      </div>
+    `;
+
+    document.getElementById('strat-aval').onclick = ()=>{ state.strategy='avalanche'; save(); renderAll(); };
+    document.getElementById('strat-snow').onclick = ()=>{ state.strategy='snowball'; save(); renderAll(); };
+    const extraInput = document.getElementById('extra-input');
+    if (extraInput) extraInput.onchange = (e)=>{ state.extraPayment = Math.max(0, parseFloat(e.target.value)||0); save(); renderAll(); };
+
+    wireBackup();
+  }
+
+  function wireBackup(){
+    const box = document.getElementById('backup-box');
+    const msg = document.getElementById('backup-msg');
+    if (!box) return;
+    function note(t, ok){ msg.style.display='block'; msg.style.color = ok?'var(--sage)':'var(--clay)'; msg.textContent = t; }
+    document.getElementById('backup-copy').onclick = async ()=>{
+      const data = JSON.stringify(state);
+      box.style.display = 'block'; box.value = data; box.select();
+      try { await navigator.clipboard.writeText(data); note('Copied — paste it somewhere safe (notes app, message to yourself).', true); }
+      catch(e){ note('Clipboard blocked — long-press the text above and copy it manually.', false); }
+    };
+    document.getElementById('backup-restore').onclick = ()=>{
+      if (box.style.display !== 'block'){ box.style.display='block'; box.value=''; box.focus(); note('Paste your backup text above, then tap restore again.', true); return; }
+      try {
+        const parsed = JSON.parse(box.value.trim());
+        if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.debts)) throw new Error('bad shape');
+        state = migrate({ debts: parsed.debts||[], budgetIncome: Number(parsed.budgetIncome)||0, categories: parsed.categories||[], strategy: parsed.strategy, extraPayment: parsed.extraPayment });
+        save(); renderAll();
+        note('Restored.', true);
+      } catch(e){ note("That doesn't look like a valid backup — check you pasted the whole thing.", false); }
+    };
+
+    const fileInput = document.getElementById('excel-file');
+    document.getElementById('import-excel').onclick = ()=>{
+      if (typeof XLSX === 'undefined'){ note('Spreadsheet library failed to load — check your connection and reopen the app.', false); return; }
+      fileInput.click();
+    };
+    fileInput.onchange = async (e)=>{
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, { type: 'array' });
+        const cleanNum = v => { if (typeof v === 'number') return v; const n = parseFloat(String(v ?? '').replace(/[£$,%\s]/g, '')); return isNaN(n) ? 0 : n; };
+        const norm = s => String(s ?? '').toLowerCase().replace(/[^a-z]/g,'');
+        const NAME_H=['name','debt','debtname','loan','account'], BAL_H=['balance','amount','owed','outstanding','remaining'],
+              APR_H=['apr','rate','interest','interestrate','aprpercent'], MIN_H=['minpayment','min','minimum','minimumpayment','monthlypayment','payment','monthly','permonth'],
+              CAT_H=['category','categoryname','budgetcategory','pot','potname'], ALLOC_H=['allocated','allocation','budget','budgeted','limit','monthlybudget'], SPENT_H=['spent','spend','used','actual'];
+        const findCol = (cells, names) => cells.findIndex(c => names.includes(norm(c)));
+        let newDebts = [], newCats = [];
+        wb.SheetNames.forEach(sn => {
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
+          let mode = null, cols = {};
+          rows.forEach(r => {
+            const nameCol = findCol(r, NAME_H), balCol = findCol(r, BAL_H);
+            const catCol = findCol(r, CAT_H), allocCol = findCol(r, ALLOC_H);
+            if (nameCol >= 0 && balCol >= 0){ mode='debt'; cols={ name:nameCol, bal:balCol, apr:findCol(r,APR_H), min:findCol(r,MIN_H) }; return; }
+            if (catCol >= 0 && allocCol >= 0){ mode='cat'; cols={ name:catCol, alloc:allocCol, spent:findCol(r,SPENT_H) }; return; }
+            if (!mode) return;
+            const label = String(r[cols.name] ?? '').trim();
+            if (!label) return;
+            if (norm(label).startsWith('total')){ mode=null; return; }
+            if (mode==='debt'){
+              const bal = cleanNum(r[cols.bal]);
+              if (bal > 0) newDebts.push({ name: label, balance: bal, original: bal, apr: cols.apr>=0?cleanNum(r[cols.apr]):0, minPayment: cols.min>=0?cleanNum(r[cols.min]):0, payments: [], promoEnd: null, postPromoApr: null });
+            } else {
+              const alloc = cleanNum(r[cols.alloc]);
+              if (alloc > 0) newCats.push({ name: label, allocated: alloc, spent: cols.spent>=0?cleanNum(r[cols.spent]):0 });
+            }
+          });
+        });
+        if (!newDebts.length && !newCats.length){ note('No recognisable rows. Debts need Name + Balance columns; budget rows need Category + Allocated.', false); fileInput.value=''; return; }
+        const replace = (state.debts.length || state.categories.length)
+          ? confirm(`Found ${newDebts.length} debt(s) and ${newCats.length} budget categorie(s).\n\nOK = REPLACE existing data\nCancel = ADD to existing data`)
+          : true;
+        if (replace){ if (newDebts.length) state.debts = newDebts; if (newCats.length) state.categories = newCats; }
+        else { state.debts = state.debts.concat(newDebts); state.categories = state.categories.concat(newCats); }
+        save(); renderAll();
+        const msg2 = document.getElementById('backup-msg');
+        if (msg2){ msg2.style.display='block'; msg2.style.color='var(--sage)'; msg2.textContent = `Imported ${newDebts.length} debt(s), ${newCats.length} categorie(s) from ${file.name}.`; }
+      } catch(err){ note("Could not read that file — make sure it's a valid .xlsx or .csv.", false); }
+      fileInput.value = '';
+    };
+  }
+
+  // ---------- DEBTS ----------
+  function renderDebts(){
+    const el = document.getElementById('view-debts');
+    const now = new Date();
+    const simMain = simulate(state.strategy, state.extraPayment);
+    const act = activeDebts().sort(state.strategy==='avalanche'
+      ? (a,b)=> effApr(b,now)-effApr(a,now) || Number(a.balance)-Number(b.balance)
+      : (a,b)=> Number(a.balance)-Number(b.balance));
+    const done = state.debts.filter(d => Number(d.balance) <= 0);
+
+    let list = act.length || done.length ? '' : '<div class="empty-state">No debts added yet</div>';
+    act.forEach((d, idx)=>{
+      const realIdx = state.debts.indexOf(d);
+      const original = Number(d.original||d.balance||0);
+      const pctPaid = original>0 ? Math.min(100, Math.round(((original-Number(d.balance||0))/original)*100)) : 0;
+      let deadlineHtml = '';
+      if (d.promoEnd){
+        const end = new Date(d.promoEnd);
+        const days = Math.ceil((end - now) / 86400000);
+        const projMonths = simMain && simMain.payoffs[d.name];
+        const projDate = projMonths != null ? new Date(now.getFullYear(), now.getMonth()+projMonths, 1) : null;
+        const atRisk = projDate && projDate > end;
+        deadlineHtml = days > 0
+          ? `<div class="card-meta" style="color:${atRisk || days < 60 ? 'var(--clay)' : 'var(--text-dim)'}">promo ends ${end.getDate()} ${MONTHS[end.getMonth()]} — ${days}d left${atRisk ? ' · projected payoff MISSES this' : ''}</div>`
+          : `<div class="card-meta" style="color:var(--clay)">promo ended — now at ${d.postPromoApr ?? d.apr}%</div>`;
+      }
+      const projMonths = simMain && simMain.payoffs[d.name];
+      list += `<div class="card">
+        <div class="card-row">
+          <div style="min-width:0">
+            <div class="card-name">${escapeHtml(d.name)} ${idx===0?'<span class="badge priority">target</span>':''}</div>
+            <div class="card-meta">${effApr(d, now)}% APR · min ${fmt2(d.minPayment)}/mo${projMonths != null && simMain.finished ? ' · clear by ' + monthLabel(projMonths) : ''}</div>
+            ${deadlineHtml}
+          </div>
+          <div class="card-amount">${fmt2(d.balance)}</div>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pctPaid}%; background:var(--amber)"></div></div>
+        <div class="row2" style="margin-top:10px">
+          <button class="mini-btn accent" data-pay="${realIdx}" style="flex:1">log payment</button>
+          <button class="mini-btn" data-edit="${realIdx}">edit</button>
+          <button class="mini-btn" data-remove-debt="${realIdx}">remove</button>
+        </div>
+      </div>`;
+    });
+    done.forEach(d=>{
+      const realIdx = state.debts.indexOf(d);
+      list += `<div class="card cleared">
+        <div class="card-row">
+          <div>
+            <div class="card-name">${escapeHtml(d.name)} <span class="badge done">cleared ✓</span></div>
+            <div class="card-meta">was ${fmt(d.original)}</div>
+          </div>
+          <button class="mini-btn" data-remove-debt="${realIdx}">remove</button>
+        </div>
+      </div>`;
+    });
+
+    const editing = editingIndex != null ? state.debts[editingIndex] : null;
+    el.innerHTML = `
+      <div class="section-label">Debts <span style="font-weight:400">${state.strategy} order</span></div>
+      ${list}
+      <button class="plus" id="show-debt-form">+ add debt</button>
+      <div class="add-form ${editing?'open':''}" id="debt-form">
+        <div class="field"><label>Name</label><input id="d-name" placeholder="e.g. Credit union loan" value="${editing?escapeHtml(editing.name):''}"/></div>
+        <div class="row2">
+          <div class="field"><label>Balance (£)</label><input id="d-balance" type="number" inputmode="decimal" placeholder="0" value="${editing?editing.balance:''}"/></div>
+          <div class="field"><label>APR now (%)</label><input id="d-apr" type="number" inputmode="decimal" placeholder="0" value="${editing?editing.apr:''}"/></div>
+        </div>
+        <div class="field"><label>Min payment/mo (£)</label><input id="d-min" type="number" inputmode="decimal" placeholder="0" value="${editing?editing.minPayment:''}"/></div>
+        <div class="row2">
+          <div class="field"><label>Promo ends (optional)</label><input id="d-promo" type="date" value="${editing&&editing.promoEnd?editing.promoEnd:''}"/></div>
+          <div class="field"><label>APR after promo (%)</label><input id="d-post-apr" type="number" inputmode="decimal" placeholder="—" value="${editing&&editing.postPromoApr!=null?editing.postPromoApr:''}"/></div>
+        </div>
+        <button class="btn" id="save-debt">${editing?'Update debt':'Save debt'}</button>
+        <button class="btn ghost" id="cancel-debt">Cancel</button>
+      </div>
+    `;
+    document.getElementById('show-debt-form').onclick = ()=>{ editingIndex=null; renderDebts(); document.getElementById('debt-form').classList.add('open'); };
+    document.getElementById('cancel-debt').onclick = ()=>{ editingIndex=null; renderDebts(); };
+    document.getElementById('save-debt').onclick = ()=>{
+      const name = document.getElementById('d-name').value.trim();
+      const balance = parseFloat(document.getElementById('d-balance').value)||0;
+      const apr = parseFloat(document.getElementById('d-apr').value)||0;
+      const minPayment = parseFloat(document.getElementById('d-min').value)||0;
+      const promoEnd = document.getElementById('d-promo').value || null;
+      const postRaw = document.getElementById('d-post-apr').value;
+      const postPromoApr = postRaw === '' ? null : (parseFloat(postRaw)||0);
+      if (!name || balance <= 0) return;
+      if (editingIndex != null){
+        const d = state.debts[editingIndex];
+        Object.assign(d, { name, balance, apr, minPayment, promoEnd, postPromoApr });
+        if (balance > Number(d.original||0)) d.original = balance;
+        editingIndex = null;
+      } else {
+        state.debts.push({ name, balance, original: balance, apr, minPayment, promoEnd, postPromoApr, payments: [] });
+      }
+      save(); renderAll();
+    };
+    el.querySelectorAll('[data-remove-debt]').forEach(btn=>{
+      btn.onclick = ()=>{ if(confirm('Remove this debt entirely? (Clearing it by logging payments keeps your progress.)')){ state.debts.splice(parseInt(btn.dataset.removeDebt),1); editingIndex=null; save(); renderAll(); } };
+    });
+    el.querySelectorAll('[data-edit]').forEach(btn=>{
+      btn.onclick = ()=>{ editingIndex = parseInt(btn.dataset.edit); renderDebts(); window.scrollTo(0, document.body.scrollHeight); };
+    });
+    el.querySelectorAll('[data-pay]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const idx = parseInt(btn.dataset.pay);
+        const d = state.debts[idx];
+        const amt = prompt('Payment toward "' + d.name + '" (£):', d.minPayment || '');
+        const val = parseFloat(amt);
+        if (isNaN(val) || val <= 0) return;
+        d.payments = d.payments || [];
+        d.payments.push({ d: new Date().toISOString().slice(0,10), amt: val });
+        d.balance = Math.max(0, Number(d.balance) - val);
+        save(); renderAll();
+        if (d.balance <= 0) celebrate(d.name);
+      };
+    });
+  }
+
+  // ---------- BUDGET ----------
+  function renderBudget(){
+    const el = document.getElementById('view-budget');
+    const now = new Date();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+    const monthPct = (now.getDate() / daysInMonth) * 100;
+    let list = state.categories.length ? '' : '<div class="empty-state">No budget categories yet</div>';
+    state.categories.forEach((c, idx)=>{
+      const spent = Number(c.spent||0), allocated = Number(c.allocated||0);
+      const pct = allocated>0 ? Math.round((spent/allocated)*100) : 0;
+      const over = spent > allocated && allocated>0;
+      const tooFast = !over && allocated>0 && pct > monthPct + 8;
+      list += `<div class="card">
+        <div class="card-row">
+          <div>
+            <div class="card-name">${escapeHtml(c.name)}</div>
+            <div class="card-meta">${fmt2(spent)} of ${fmt(allocated)}</div>
+          </div>
+          <span class="badge ${over?'over':(tooFast?'priority':'ok')}">${over?'over':(tooFast?'fast pace':pct+'%')}</span>
+        </div>
+        <div class="bar-track" style="position:relative">
+          <div class="bar-fill" style="width:${Math.min(pct,100)}%; background:${over?'var(--clay)':(tooFast?'var(--amber)':'var(--sage)')}"></div>
+        </div>
+        <div class="card-meta" style="margin-top:5px">day ${now.getDate()} of ${daysInMonth} — pace marker at ${Math.round(monthPct)}%</div>
+        <div class="row2" style="margin-top:10px">
+          <button class="mini-btn accent" data-spend="${idx}" style="flex:1">+ log spend</button>
+          <button class="mini-btn" data-remove-cat="${idx}">remove</button>
+        </div>
+      </div>`;
+    });
+    el.innerHTML = `
+      <div class="section-label">Monthly income</div>
+      <div class="card">
+        <input id="income-input" type="number" inputmode="decimal" value="${state.budgetIncome||''}" placeholder="£ per month" style="width:100%; background:transparent; border:none; color:var(--text); font-family:var(--mono); font-size:16px;"/>
+      </div>
+      <div class="section-label">Categories
+        ${state.categories.length ? '<button class="mini-btn" id="new-month">start new month</button>' : ''}
+      </div>
+      ${list}
+      <button class="plus" id="show-cat-form">+ add category</button>
+      <div class="add-form" id="cat-form">
+        <div class="field"><label>Category name</label><input id="c-name" placeholder="e.g. Groceries"/></div>
+        <div class="field"><label>Allocated (£/mo)</label><input id="c-allocated" type="number" inputmode="decimal" placeholder="0"/></div>
+        <button class="btn" id="save-cat">Save category</button>
+        <button class="btn ghost" id="cancel-cat">Cancel</button>
+      </div>
+    `;
+    document.getElementById('income-input').onchange = (e)=>{ state.budgetIncome = parseFloat(e.target.value)||0; save(); renderRunway(); renderOverview(); };
+    const nm = document.getElementById('new-month');
+    if (nm) nm.onclick = ()=>{
+      if (confirm('Reset all category spend to £0 for the new month? Allocations stay as they are.')){
+        state.categories.forEach(c=> c.spent = 0);
+        save(); renderAll();
+      }
+    };
+    document.getElementById('show-cat-form').onclick = ()=> document.getElementById('cat-form').classList.add('open');
+    document.getElementById('cancel-cat').onclick = ()=> document.getElementById('cat-form').classList.remove('open');
+    document.getElementById('save-cat').onclick = ()=>{
+      const name = document.getElementById('c-name').value.trim();
+      const allocated = parseFloat(document.getElementById('c-allocated').value)||0;
+      if (!name) return;
+      state.categories.push({ name, allocated, spent: 0 });
+      save(); renderAll();
+    };
+    el.querySelectorAll('[data-remove-cat]').forEach(btn=>{
+      btn.onclick = ()=>{ state.categories.splice(parseInt(btn.dataset.removeCat),1); save(); renderAll(); };
+    });
+    el.querySelectorAll('[data-spend]').forEach(btn=>{
+      btn.onclick = ()=>{
+        const idx = parseInt(btn.dataset.spend);
+        const amt = prompt('Log spend for "' + state.categories[idx].name + '" (£):');
+        const val = parseFloat(amt);
+        if (!isNaN(val) && val>0){ state.categories[idx].spent = Number(state.categories[idx].spent||0) + val; save(); renderAll(); }
+      };
+    });
+  }
+
+  function renderAll(){
+    if (!loaded) return;
+    renderRunway();
+    renderOverview();
+    renderDebts();
+    renderBudget();
+  }
+
+  load();
+})();
+</script>

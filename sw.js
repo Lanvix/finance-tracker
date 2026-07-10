@@ -1,6 +1,10 @@
 // Runway finance tracker — service worker
 // Bump this version string whenever you update index.html so installed apps pick up the change.
+<<<<<<< HEAD
 const CACHE = 'runway-v2';
+=======
+const CACHE = 'runway-v1';
+>>>>>>> parent of 7f103be (Deleted old sw.js)
 
 const ASSETS = [
   './',

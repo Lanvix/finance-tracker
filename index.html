@@ -34,6 +34,22 @@
   .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
   .seg button { flex:1; background:transparent; border:none; color:var(--text-2); font-family:var(--mono); font-size:12px; padding:9px 0; text-transform:uppercase; min-height:38px; }
   .seg button.active { background:var(--amber-dim); color:var(--amber); }
+
+  .strategy-toggle { flex-wrap:wrap; }
+  .strategy-toggle button { flex:1 1 45%; min-width:45%; }
+
+  .sheet-overlay { position:fixed; inset:0; background:rgba(10,13,18,0.7); z-index:60; display:none; align-items:flex-end; }
+  .sheet-overlay.show { display:flex; }
+  .sheet-panel { background:var(--panel-hi); border:1px solid var(--line); border-bottom:none; border-radius:16px 16px 0 0; width:100%; max-width:480px; margin:0 auto; padding:20px 18px calc(20px + env(safe-area-inset-bottom)); animation:sheetUp 0.22s ease; }
+  @keyframes sheetUp { from{ transform:translateY(40px); opacity:0.6; } to{ transform:translateY(0); opacity:1; } }
+  @media (prefers-reduced-motion:reduce){ .sheet-panel{ animation:none; } }
+  .sheet-grabber { width:38px; height:4px; border-radius:2px; background:var(--line); margin:0 auto 14px; }
+
+  .lock-screen { position:fixed; inset:0; background:var(--bg); z-index:100; display:none; align-items:center; justify-content:center; text-align:center; padding:30px; }
+  .lock-screen.show { display:flex; }
+  .lock-screen input { width:180px; text-align:center; font-family:var(--mono); font-size:22px; letter-spacing:0.3em; background:var(--panel); border:1px solid var(--line); color:var(--text); padding:12px; border-radius:8px; }
+
+  .test-pass { color:var(--sage); } .test-fail { color:var(--clay); }
   body { margin:0; background:var(--bg); }
   #app-root { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; max-width:480px; margin:0 auto; padding-bottom:92px; font-size:15px; line-height:1.5; }
 
@@ -172,6 +188,26 @@
     </div>
   </div>
   <div class="toast" id="toast" role="status"></div>
+
+  <div class="sheet-overlay" id="sheet" role="dialog" aria-modal="true">
+    <div class="sheet-panel">
+      <div class="sheet-grabber"></div>
+      <div class="t-card" id="sheet-title" style="margin-bottom:14px;"></div>
+      <div id="sheet-fields"></div>
+      <button class="btn" id="sheet-save">Save</button>
+      <button class="btn ghost" id="sheet-cancel">Cancel</button>
+    </div>
+  </div>
+
+  <div class="lock-screen" id="lock-screen">
+    <div>
+      <div class="t-micro" style="text-transform:uppercase; letter-spacing:0.12em; margin-bottom:6px;">// runway</div>
+      <div class="t-card" style="margin-bottom:18px;">Enter your PIN</div>
+      <input id="lock-pin" type="password" inputmode="numeric" maxlength="8" autocomplete="off"/>
+      <div><button class="btn sm" id="lock-unlock" style="margin-top:16px;">Unlock</button></div>
+      <div class="t-help" id="lock-msg" style="margin-top:12px; min-height:20px;"></div>
+    </div>
+  </div>
 </div>
 
 <script>
@@ -183,7 +219,8 @@
   function defaults(){
     return { debts:[], categories:[], bills:[], goals:[], activity:[], accounts:[], snapshots:[],
       budgetIncome:0, strategy:'avalanche', extraPayment:0, lumpSum:0,
-      settings:{ theme:'dark', budgetView:'month' },
+      settings:{ theme:'dark', budgetView:'month', payFrequency:'monthly', nextPayday:null, pinHash:null },
+      lastBackupAt:null,
       onboarded:false,
       monthKey: monthKeyNow() };
   }
@@ -192,10 +229,10 @@
     const base = defaults();
     s = { ...base, ...s };
     s.settings = { ...base.settings, ...(s.settings||{}) };
-    s.debts = (s.debts||[]).map((d,i) => ({ payments:[], promoEnd:null, postPromoApr:null, dueDay:null, ord:i, ...d }));
+    s.debts = (s.debts||[]).map((d,i) => ({ payments:[], promoEnd:null, postPromoApr:null, dueDay:null, ord:i, fixedInterest:false, ...d }));
     s.debts.forEach((d,i)=>{ if (d.ord==null) d.ord=i; });
-    s.bills = (s.bills||[]).map(b => ({ paid:false, ...b }));
-    s.goals = s.goals||[];
+    s.bills = (s.bills||[]).map(b => ({ paid:false, freq:'monthly', ...b }));
+    s.goals = (s.goals||[]).map(g => ({ targetDate:null, ...g }));
     s.activity = s.activity||[];
     s.accounts = s.accounts||[];
     s.snapshots = s.snapshots||[];
@@ -206,6 +243,75 @@
   }
   function applyTheme(){ document.documentElement.setAttribute('data-theme', (state.settings&&state.settings.theme)||'dark');
     const tc=document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = state.settings.theme==='light' ? '#f4f2ec' : '#10141a'; }
+
+  // ---------- bottom sheet (replaces prompt dialogs) ----------
+  let sheetOnSave = null;
+  function openSheet(cfg){
+    const sh = document.getElementById('sheet');
+    document.getElementById('sheet-title').textContent = cfg.title;
+    document.getElementById('sheet-save').textContent = cfg.saveLabel || 'Save';
+    const wrap = document.getElementById('sheet-fields');
+    wrap.innerHTML = cfg.fields.map(f=>`
+      <div class="field">
+        <label for="sf-${f.id}">${esc(f.label)}</label>
+        <input id="sf-${f.id}" type="${f.type||'number'}" ${(f.type||'number')==='number'?'inputmode="decimal"':''} value="${f.value!=null?esc(f.value):''}" placeholder="${esc(f.placeholder||'')}"/>
+      </div>`).join('');
+    sheetOnSave = ()=>{
+      const values = {};
+      cfg.fields.forEach(f=>{ values[f.id] = document.getElementById('sf-'+f.id).value; });
+      return cfg.onSave(values);
+    };
+    sh.classList.add('show');
+    const first = wrap.querySelector('input');
+    if (first) setTimeout(()=>{ first.focus(); first.select && first.select(); }, 60);
+  }
+  function closeSheet(){ document.getElementById('sheet').classList.remove('show'); sheetOnSave=null; }
+  document.getElementById('sheet-cancel').onclick = closeSheet;
+  document.getElementById('sheet').addEventListener('click', e=>{ if (e.target.id==='sheet') closeSheet(); });
+  document.getElementById('sheet-save').onclick = ()=>{ if (sheetOnSave){ const ok = sheetOnSave(); if (ok !== false) closeSheet(); } };
+  document.getElementById('sheet-fields').addEventListener('keydown', e=>{ if (e.key==='Enter'){ e.preventDefault(); document.getElementById('sheet-save').click(); } });
+
+  // ---------- PIN lock (deterrent, not encryption) ----------
+  async function sha256(str){
+    const buf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(str));
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  }
+  function showLockIfNeeded(){
+    if (!state.settings.pinHash) return;
+    const ls = document.getElementById('lock-screen');
+    ls.classList.add('show');
+    const pin = document.getElementById('lock-pin'), msg = document.getElementById('lock-msg');
+    pin.value=''; msg.textContent='';
+    const tryUnlock = async ()=>{
+      if (!pin.value) return;
+      const h = await sha256(pin.value);
+      if (h === state.settings.pinHash){ ls.classList.remove('show'); }
+      else { msg.textContent = "That's not it — try again."; pin.value=''; }
+    };
+    document.getElementById('lock-unlock').onclick = tryUnlock;
+    pin.onkeydown = e=>{ if (e.key==='Enter') tryUnlock(); };
+    setTimeout(()=>pin.focus(), 100);
+  }
+
+  // ---------- pay cycle (4-weekly support) ----------
+  function monthlyIncome(){
+    const raw = Number(state.budgetIncome)||0;
+    return state.settings.payFrequency === '4weekly' ? raw * 13 / 12 : raw;
+  }
+  function bonusPacketMonth(){
+    // With 4-weekly pay there are 13 packets/year; find the next month containing two paydays.
+    if (state.settings.payFrequency !== '4weekly' || !state.settings.nextPayday) return null;
+    let d = new Date(state.settings.nextPayday + 'T12:00:00');
+    if (isNaN(d)) return null;
+    const counts = {};
+    for (let i=0; i<14; i++){
+      const k = d.getFullYear()+'-'+d.getMonth();
+      counts[k] = (counts[k]||0)+1;
+      if (counts[k] === 2) return new Date(d.getFullYear(), d.getMonth(), 1);
+      d = new Date(d.getTime() + 28*86400000);
+    }
+    return null;
+  }
 
   async function load(){
     try {
@@ -218,6 +324,7 @@
       }
     } catch(e){}
     loaded = true;
+    showLockIfNeeded();
     renderAll();
   }
   async function save(){
@@ -286,14 +393,20 @@
     if (d.promoEnd) return (d.postPromoApr!=null && d.postPromoApr!=='') ? Number(d.postPromoApr) : Number(d.apr)||0;
     return Number(d.apr)||0;
   }
+  // marginal rate: what overpaying actually saves — zero for fixed/HP debts where interest is precomputed
+  function marginalApr(d, when){ return d.fixedInterest ? 0 : effApr(d, when); }
   function debtSorter(strategy, when){
     const balOf = d => d.bal !== undefined ? d.bal : Number(d.balance);
     if (strategy==='custom') return (a,b)=> (a.ord??999)-(b.ord??999);
     if (strategy==='snowball') return (a,b)=> balOf(a)-balOf(b);
-    return (a,b)=>{ const diff = effApr(b,when)-effApr(a,when); return diff !== 0 ? diff : balOf(a)-balOf(b); };
+    if (strategy==='promo'){
+      const key = d => d.promoEnd ? new Date(d.promoEnd).getTime() : Infinity;
+      return (a,b)=>{ const k = key(a)-key(b); if (k) return k; const r = marginalApr(b,when)-marginalApr(a,when); return r !== 0 ? r : balOf(a)-balOf(b); };
+    }
+    return (a,b)=>{ const diff = marginalApr(b,when)-marginalApr(a,when); return diff !== 0 ? diff : balOf(a)-balOf(b); };
   }
-  function simulate(strategy, extra, lump){
-    const src = activeDebts();
+  function simulate(strategy, extra, lump, srcOverride){
+    const src = srcOverride || activeDebts();
     if (!src.length) return null;
     const ds = src.map(d => ({...d, bal:Number(d.balance)}));
     const now = new Date();
@@ -310,7 +423,7 @@
     while (ds.some(d=>d.bal>0.005) && month<600){
       month++;
       const cur = new Date(start.getFullYear(), start.getMonth()+month, 1);
-      ds.forEach(d=>{ if(d.bal<=0)return; const i=d.bal*(effApr(d,cur)/100/12); d.bal+=i; totalInterest+=i; });
+      ds.forEach(d=>{ if(d.bal<=0 || d.fixedInterest)return; const i=d.bal*(effApr(d,cur)/100/12); d.bal+=i; totalInterest+=i; });
       let remaining = totalBudget;
       ds.forEach(d=>{ if(d.bal>0){ const p=Math.min(Number(d.minPayment||0),d.bal); d.bal-=p; remaining-=p; } });
       const order = ds.filter(d=>d.bal>0).sort(debtSorter(strategy, cur));
@@ -320,6 +433,37 @@
     }
     return { months:month, totalInterest, series, payoffs, finished:!ds.some(d=>d.bal>0.005) };
   }
+  // ---------- self-tests: engine checked against independently derived expectations ----------
+  function runSelfTests(){
+    const t = [];
+    const check = (name, cond, detail) => t.push({ name, pass: !!cond, detail });
+    // 1. Amortisation vs closed form: £1,000 @ 12% APR, £100/mo → n = ln(1/(1−rP/A))/ln(1+r) ≈ 10.6 → 11 months
+    const s1 = simulate('avalanche', 0, 0, [{name:'T1', balance:1000, apr:12, minPayment:100}]);
+    check('Amortisation matches closed-form', s1 && s1.finished && s1.months===11 && s1.totalInterest>50 && s1.totalInterest<65,
+      s1 ? `${s1.months}mo, ${fmt2(s1.totalInterest)} interest (expected 11mo, ~£57)` : 'no result');
+    // 2. Promo rate flips on the end date
+    const pd = {apr:0, promoEnd:'2020-01-01', postPromoApr:29.9};
+    check('Promo APR flips after end date', effApr(pd, new Date('2019-06-01'))===0 && effApr(pd, new Date('2021-06-01'))===29.9,
+      `before: ${effApr(pd, new Date('2019-06-01'))}%, after: ${effApr(pd, new Date('2021-06-01'))}%`);
+    // 3. Fixed-interest debts accrue nothing
+    const s3 = simulate('avalanche', 0, 0, [{name:'T3', balance:1200, apr:19.9, minPayment:100, fixedInterest:true}]);
+    check('Fixed loans accrue zero interest', s3 && s3.finished && s3.months===12 && s3.totalInterest===0,
+      s3 ? `${s3.months}mo, ${fmt2(s3.totalInterest)} interest (expected 12mo, £0)` : 'no result');
+    // 4. Cleared debt's minimum rolls into the attack
+    const s4 = simulate('avalanche', 0, 0, [{name:'A', balance:100, apr:0, minPayment:100},{name:'B', balance:900, apr:0, minPayment:0}]);
+    check('Cleared minimums roll over', s4 && s4.finished && s4.months===10,
+      s4 ? `${s4.months}mo for £1,000 at £100/mo budget (expected 10)` : 'no result');
+    // 5. Custom order respected
+    const s5 = simulate('custom', 50, 0, [{name:'A', balance:100, apr:0, minPayment:0, ord:1},{name:'B', balance:100, apr:0, minPayment:0, ord:0}]);
+    check('Custom order targets in sequence', s5 && s5.payoffs['B']===2 && s5.payoffs['A']===4,
+      s5 ? `B cleared month ${s5.payoffs['B']}, A month ${s5.payoffs['A']} (expected 2 and 4)` : 'no result');
+    // 6. Payments never overshoot: final projected balance is exactly zero
+    const s6 = simulate('snowball', 37, 0, [{name:'X', balance:333.33, apr:21.7, minPayment:11}]);
+    check('Balances clamp cleanly to zero', s6 && s6.finished && Math.abs(s6.series[s6.series.length-1])<0.01,
+      s6 ? `final balance ${s6.series[s6.series.length-1].toFixed(4)}` : 'no result');
+    return t;
+  }
+
   function sparkline(seriesList){
     // seriesList: [{series, color}]
     const valid = seriesList.filter(s=>s.series && s.series.length>1);
@@ -343,8 +487,8 @@
 
   // ---------- money maths ----------
   function money(){
-    const income = Number(state.budgetIncome)||0;
-    const billsTotal = state.bills.reduce((s,b)=>s+Number(b.amount||0),0);
+    const income = monthlyIncome();
+    const billsTotal = state.bills.reduce((s,b)=>s + (b.freq==='annual' ? Number(b.amount||0)/12 : Number(b.amount||0)),0);
     const minTotal = activeDebts().reduce((s,d)=>s+Number(d.minPayment||0),0);
     const goalsTotal = state.goals.reduce((s,g)=>s+Number(g.monthly||0),0);
     const extra = Number(state.extraPayment)||0;
@@ -385,6 +529,21 @@
     state.bills.filter(b=>!b.paid && b.dueDay && b.dueDay>=today && b.dueDay<=today+7).forEach(b=>{
       alerts.push({ level:'info', title:`${b.name} due on the ${ord(b.dueDay)}`, body:`${fmt2(b.amount)} — mark it paid on the Budget tab once it goes out.` });
     });
+    // backup durability nudge — browser storage can be evicted; local-only data needs a copy somewhere
+    if (state.debts.length || state.categories.length){
+      const last = state.lastBackupAt ? new Date(state.lastBackupAt) : null;
+      const stale = !last || (now - last) > 30*86400000;
+      if (stale) alerts.push({ level:'info', title: last ? "It's been a month since your last backup" : "You haven't backed up yet",
+        body:'Everything lives only in this browser — the phone can clear it under storage pressure. Thirty seconds in More → Backup keeps your history safe.' });
+    }
+    // 4-weekly bonus packet heads-up
+    const bm = bonusPacketMonth();
+    if (bm){
+      const monthsAway = (bm.getFullYear()-now.getFullYear())*12 + (bm.getMonth()-now.getMonth());
+      if (monthsAway >= 0 && monthsAway <= 1)
+        alerts.push({ level:'info', title:`Double-payday month: ${MONTHS[bm.getMonth()]}`,
+          body:`You get 13 packets a year on 4-weekly pay, and ${monthsAway===0?'this month':'next month'} is the one with two. That spare ${fmt(state.budgetIncome)} isn't in the monthly plan — pointing it at your target debt is a free month of progress.` });
+    }
     return alerts;
   }
   const ord = n => n + (['th','st','nd','rd'][((n%100)>10 && (n%100)<14) ? 0 : Math.min(n%10,4)] || 'th');
@@ -414,6 +573,11 @@
     if (state.strategy==='snowball')
       return { title:`Anything spare goes on ${target.name}`,
         why:`It's your smallest balance at ${fmt(target.balance)} — clearing it frees up ${fmt2(target.minPayment)}/month and gives you a quick win.` };
+    if (state.strategy==='promo')
+      return { title:`Anything spare goes on ${target.name}`,
+        why: target.promoEnd
+          ? `It has the nearest promo deadline (${new Date(target.promoEnd).getDate()} ${MONTHS[new Date(target.promoEnd).getMonth()]}) — clearing it before the rate flips means paying no interest on it at all.`
+          : `No promos left to beat, so it falls back to your most expensive debt at ${effApr(target,now)}%.` };
     return { title:`Anything spare goes on ${target.name}`,
       why:`It's first in your custom order. Worth knowing: at ${effApr(target,now)}% it costs about ${fmt2(target.balance*(effApr(target,now)/100/12))}/month in interest right now.` };
   }
@@ -481,28 +645,36 @@
   // ---------- shared: log payment ----------
   function logPayment(idx){
     const d = state.debts[idx];
-    const amt = prompt('Payment toward "'+d.name+'" (£):', d.minPayment || '');
-    const val = parseFloat(amt);
-    if (isNaN(val) || val<=0) return;
-    const prevBalance = Number(d.balance);
-    const activityTxt = `Paid ${fmt2(val)} toward ${d.name}`;
-    d.payments = d.payments||[];
-    d.payments.push({ d:new Date().toISOString().slice(0,10), amt:val });
-    d.balance = Math.max(0, prevBalance - val);
-    logActivity(activityTxt);
-    const cleared = d.balance <= 0;
-    const clearedTxt = `${d.name} fully cleared 🎉`;
-    if (cleared){ logActivity(clearedTxt); }
-    save(); renderAll();
-    const undoFn = ()=>{
-      d.balance = prevBalance;
-      d.payments.pop();
-      if (cleared) dropActivityHead(clearedTxt);
-      dropActivityHead(activityTxt);
-      document.getElementById('celebrate').classList.remove('show');
-    };
-    if (cleared){ celebrate(d.name); toast(`${d.name} cleared`, undoFn); }
-    else toast(`${fmt2(val)} logged — ${d.name} now ${fmt2(d.balance)}`, undoFn);
+    // small balances default to full clearance; otherwise the minimum
+    const suggested = Number(d.balance) <= 400 ? Number(d.balance) : (d.minPayment || '');
+    openSheet({
+      title: 'Log payment — ' + d.name,
+      saveLabel: 'Log payment',
+      fields: [{ id:'amt', label:'Amount (£)', value: suggested, placeholder:'0' }],
+      onSave: (v)=>{
+        const val = parseFloat(v.amt);
+        if (isNaN(val) || val<=0){ toast('Enter an amount above zero'); return false; }
+        const prevBalance = Number(d.balance);
+        const activityTxt = `Paid ${fmt2(val)} toward ${d.name}`;
+        d.payments = d.payments||[];
+        d.payments.push({ d:new Date().toISOString().slice(0,10), amt:val });
+        d.balance = Math.max(0, prevBalance - val);
+        logActivity(activityTxt);
+        const cleared = d.balance <= 0;
+        const clearedTxt = `${d.name} fully cleared 🎉`;
+        if (cleared){ logActivity(clearedTxt); }
+        save(); renderAll();
+        const undoFn = ()=>{
+          d.balance = prevBalance;
+          d.payments.pop();
+          if (cleared) dropActivityHead(clearedTxt);
+          dropActivityHead(activityTxt);
+          document.getElementById('celebrate').classList.remove('show');
+        };
+        if (cleared){ celebrate(d.name); toast(`${d.name} cleared`, undoFn); }
+        else toast(`${fmt2(val)} logged — ${d.name} now ${fmt2(d.balance)}`, undoFn);
+      }
+    });
   }
 
   // ================= ONBOARDING =================
@@ -597,7 +769,11 @@
     el.innerHTML = `
       ${newMonthCard}
       <div class="card hi" style="text-align:center; padding:22px 16px;">
-        ${sim && sim.finished
+        ${state.debts.length && !activeDebts().length
+          ? `<div class="t-micro" style="text-transform:uppercase; letter-spacing:0.08em;">you did it</div>
+             <div class="hero-num">Debt-free ✓</div>
+             <div class="t-help" style="margin-top:6px;">${fmt(totalOriginal)} cleared. Runway's job now is the other direction — your net position is ${(()=>{ const np=netPosition(); return (np.net<0?'−':'')+fmt(Math.abs(np.net)); })()} and every month it climbs. Goals and accounts live on the Budget and More tabs.</div>`
+          : sim && sim.finished
           ? `<div class="t-micro" style="text-transform:uppercase; letter-spacing:0.08em;">debt-free</div>
              <div class="hero-num">${monthLabel(sim.months)}</div>
              <div class="t-help" style="margin-top:4px;">${sim.months} months away · ${fmt(totalOwed)} still owed</div>`
@@ -694,7 +870,9 @@
       ? `Avalanche targets the highest interest rate first — it's the cheapest route mathematically. Trade-off: your first cleared debt may take longer, so it needs patience.`
       : state.strategy==='snowball'
       ? `Snowball targets the smallest balance first — quick wins keep motivation up. Trade-off: it usually costs a bit more in interest than avalanche.`
-      : `Custom means you choose the order — drag debts up and down on the Debts tab with the arrows. Useful when something matters more than maths: a debt to family, collateral being held, or a promo you're managing by hand.`;
+      : state.strategy==='promo'
+      ? `Promo-first clears debts with expiring 0% deals before anything else, soonest deadline first, then falls back to highest rate. Use it when beating a promo cliff matters more than pure interest maths.`
+      : `Custom means you choose the order — use the arrows on the Debts tab. Useful when something matters more than maths: a debt to family, collateral being held, or a promo you're managing by hand.`;
     const stratDiff = (simOther && simOther.finished && simMain.finished) ? simOther.totalInterest - simMain.totalInterest : null;
 
     const scenRow = (label, s) => s && s.finished
@@ -707,6 +885,7 @@
         <div class="strategy-toggle">
           <button id="strat-aval" class="${state.strategy==='avalanche'?'active':''}">Avalanche</button>
           <button id="strat-snow" class="${state.strategy==='snowball'?'active':''}">Snowball</button>
+          <button id="strat-promo" class="${state.strategy==='promo'?'active':''}">Promo first</button>
           <button id="strat-cust" class="${state.strategy==='custom'?'active':''}">Custom</button>
         </div>
         <div class="t-help">${stratWhy}</div>
@@ -768,6 +947,7 @@
     `;
     document.getElementById('strat-aval').onclick = ()=>{ state.strategy='avalanche'; save(); renderAll(); };
     document.getElementById('strat-snow').onclick = ()=>{ state.strategy='snowball'; save(); renderAll(); };
+    document.getElementById('strat-promo').onclick = ()=>{ state.strategy='promo'; save(); renderAll(); };
     document.getElementById('strat-cust').onclick = ()=>{
       // seed custom order from current sorted order so it starts sensible
       const now2 = new Date();
@@ -804,6 +984,9 @@
           : `<div class="meta" style="color:var(--clay)">Promo over — now charging ${d.postPromoApr??d.apr}%</div>`;
       }
       const interestMo = Number(d.balance)*(effApr(d,now)/100/12);
+      const costLine = d.fixedInterest
+        ? ' · fixed loan — interest already built into the balance'
+        : (interestMo>0.5 ? ' · costing about '+fmt2(interestMo)+'/mo in interest right now' : '');
       list += `<div class="card">
         <div class="card-row">
           <div style="min-width:0">
@@ -814,7 +997,7 @@
           <div class="t-stat">${fmt2(d.balance)}</div>
         </div>
         <div class="bar-track"><div class="bar-fill" style="width:${pctPaid}%; background:var(--amber)"></div></div>
-        <div class="micro">${pctPaid}% of the original ${fmt(original)} paid off${interestMo>0.5 ? ' · costing about '+fmt2(interestMo)+'/mo in interest right now' : ''}</div>
+        <div class="micro">${pctPaid}% of the original ${fmt(original)} paid off${costLine}</div>
         <div class="row2" style="margin-top:12px">
           <button class="mini-btn accent" data-pay="${realIdx}">Log payment</button>
           <button class="mini-btn" data-edit="${realIdx}">Edit</button>
@@ -857,6 +1040,13 @@
           <div class="field"><label>0% promo ends (optional)</label><input id="d-promo" type="date" value="${editing&&editing.promoEnd?editing.promoEnd:''}"/></div>
           <div class="field"><label>Rate after promo (%)</label><input id="d-post-apr" type="number" inputmode="decimal" placeholder="—" value="${editing&&editing.postPromoApr!=null?editing.postPromoApr:''}"/></div>
         </div>
+        <div class="field">
+          <label style="display:flex; align-items:center; gap:10px; text-transform:none; font-size:13px; color:var(--text-2); cursor:pointer;">
+            <input type="checkbox" id="d-fixed" ${editing&&editing.fixedInterest?'checked':''} style="width:auto; min-height:0; accent-color:var(--amber);"/>
+            Interest already included in the balance (HP / fixed loan)
+          </label>
+          <div class="micro" style="margin-top:4px;">For car finance and fixed loans where interest is precomputed — overpaying reduces the balance but doesn't shrink interest, so it won't be prioritised for savings.</div>
+        </div>
         <button class="btn" id="save-debt">${editing?'Update debt':'Save debt'}</button>
         <button class="btn ghost" id="cancel-debt">Cancel</button>
       </div>
@@ -871,16 +1061,17 @@
       const promoEnd = document.getElementById('d-promo').value || null;
       const postRaw = document.getElementById('d-post-apr').value;
       const postPromoApr = postRaw==='' ? null : (parseFloat(postRaw)||0);
+      const fixedInterest = document.getElementById('d-fixed').checked;
       if (!name){ toast('Give the debt a name'); return; }
       if (balance<=0){ toast('Balance needs to be above zero'); return; }
       if (editingIndex!=null){
         const d = state.debts[editingIndex];
-        Object.assign(d, { name, balance, apr, minPayment, promoEnd, postPromoApr });
+        Object.assign(d, { name, balance, apr, minPayment, promoEnd, postPromoApr, fixedInterest });
         if (balance > Number(d.original||0)) d.original = balance;
         logActivity(`Edited ${name}`);
         editingIndex=null;
       } else {
-        state.debts.push({ name, balance, original:balance, apr, minPayment, promoEnd, postPromoApr, payments:[] });
+        state.debts.push({ name, balance, original:balance, apr, minPayment, promoEnd, postPromoApr, fixedInterest, payments:[], ord:state.debts.length });
         logActivity(`Added debt: ${name} (${fmt(balance)})`);
       }
       save(); renderAll();
@@ -966,10 +1157,11 @@
     const sortedBills = [...state.bills].sort((a,b)=>(a.dueDay||32)-(b.dueDay||32));
     sortedBills.forEach(b=>{
       const realIdx = state.bills.indexOf(b);
+      const amountLine = b.freq==='annual' ? `${fmt2(b.amount)}/yr ≈ ${fmt2(Number(b.amount)/12)}/mo` : `${fmt2(b.amount)}/mo`;
       billList += `<div class="card" style="padding:13px 16px;">
         <div class="card-row">
           <div><div style="font-size:15px; font-weight:600;">${esc(b.name)}</div>
-          <div class="meta">${fmt2(b.amount)}/mo${b.dueDay?' · due the '+ord(b.dueDay):''}</div></div>
+          <div class="meta">${amountLine}${b.dueDay?' · due the '+ord(b.dueDay):''}</div></div>
           <div class="row2" style="margin-top:0">
             <button class="mini-btn ${b.paid?'':'accent'}" data-bill-paid="${realIdx}">${b.paid?'paid ✓':'mark paid'}</button>
             <button class="mini-btn" data-remove-bill="${realIdx}">×</button>
@@ -981,6 +1173,14 @@
     let goalList = state.goals.length ? '' : `<div class="empty">Savings goals — emergency fund, the Golf GTD fund, whatever. Set a target and a monthly amount and the Plan tab shows what it trades off against debt.</div>`;
     state.goals.forEach((g, idx)=>{
       const pct = Number(g.target)>0 ? Math.min(100, Math.round((Number(g.saved)/Number(g.target))*100)) : 0;
+      let dateLine = '';
+      if (g.targetDate && Number(g.saved) < Number(g.target)){
+        const now2 = new Date();
+        const td = new Date(g.targetDate + 'T12:00:00');
+        const monthsLeft = Math.max(1, (td.getFullYear()-now2.getFullYear())*12 + (td.getMonth()-now2.getMonth()));
+        const needed = (Number(g.target)-Number(g.saved)) / monthsLeft;
+        dateLine = `<div class="micro">To hit ${MONTHS[td.getMonth()]} ${td.getFullYear()} you need ${fmt2(needed)}/month${Number(g.monthly)>0 && needed > Number(g.monthly)*1.05 ? ' — more than your current '+fmt(g.monthly) : ''}</div>`;
+      }
       goalList += `<div class="card">
         <div class="card-row">
           <div><div class="t-card">${esc(g.name)}</div>
@@ -988,6 +1188,7 @@
           <span class="badge ${pct>=100?'ok':'priority'}">${pct}%</span>
         </div>
         <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:var(--sage)"></div></div>
+        ${dateLine}
         <div class="row2" style="margin-top:12px">
           <button class="mini-btn accent" data-goal-add="${idx}">Add to it</button>
           <button class="mini-btn" data-remove-goal="${idx}">Remove</button>
@@ -996,12 +1197,26 @@
     });
 
     el.innerHTML = `
-      <div class="section"><span class="t-section">Income</span></div>
+      <div class="section"><span class="t-section">Income</span>
+        <span class="seg" style="width:170px;">
+          <button id="pf-monthly" class="${state.settings.payFrequency!=='4weekly'?'active':''}">Monthly</button>
+          <button id="pf-4weekly" class="${state.settings.payFrequency==='4weekly'?'active':''}">4-weekly</button>
+        </span>
+      </div>
       <div class="card">
-        <div class="field" style="margin-bottom:0">
-          <label>Take-home per month (£)</label>
+        <div class="field" style="margin-bottom:${state.settings.payFrequency==='4weekly'?'12px':'0'}">
+          <label>${state.settings.payFrequency==='4weekly'?'Take-home per pay packet (£)':'Take-home per month (£)'}</label>
           <input id="income-input" type="number" inputmode="decimal" value="${state.budgetIncome||''}" placeholder="0"/>
         </div>
+        ${state.settings.payFrequency==='4weekly'?`
+        <div class="field" style="margin-bottom:0">
+          <label>Next payday</label>
+          <input id="payday-input" type="date" value="${state.settings.nextPayday||''}"/>
+        </div>
+        <div class="micro" style="margin-top:8px;">4-weekly means 13 packets a year — that's ${fmt(monthlyIncome())} a month on average, which is what the budget maths uses.${(()=>{
+          const bm = bonusPacketMonth();
+          return bm ? ` Your double-payday month is <b style="color:var(--amber)">${MONTHS[bm.getMonth()]} ${bm.getFullYear()}</b> — a whole spare packet worth pointing at your target debt.` : '';
+        })()}</div>`:''}
         ${m.income>0?`<div class="micro" style="margin-top:10px;">Bills ${fmt(m.billsTotal)} + minimums ${fmt(m.minTotal)} + extra debt ${fmt(m.extra)} + goals ${fmt(m.goalsTotal)} → <b style="color:${m.freeCash<0?'var(--clay)':'var(--sage)'}">${fmt(m.freeCash)} free</b> for the categories below</div>`:''}
       </div>
 
@@ -1011,9 +1226,12 @@
       <div class="form" id="bill-form">
         <div class="field"><label>Name</label><input id="b-name" placeholder="e.g. Car insurance"/></div>
         <div class="row2">
-          <div class="field"><label>Monthly amount (£)</label><input id="b-amount" type="number" inputmode="decimal" placeholder="0"/></div>
-          <div class="field"><label>Due day (1–31)</label><input id="b-due" type="number" inputmode="numeric" min="1" max="31" placeholder="e.g. 15"/></div>
+          <div class="field"><label>Amount (£)</label><input id="b-amount" type="number" inputmode="decimal" placeholder="0"/></div>
+          <div class="field"><label>Frequency</label>
+            <select id="b-freq"><option value="monthly">Monthly</option><option value="annual">Annual</option></select>
+          </div>
         </div>
+        <div class="field"><label>Due day of month (1–31)</label><input id="b-due" type="number" inputmode="numeric" min="1" max="31" placeholder="e.g. 15"/></div>
         <button class="btn" id="save-bill">Save bill</button>
         <button class="btn ghost" id="cancel-bill">Cancel</button>
       </div>
@@ -1042,13 +1260,20 @@
           <div class="field"><label>Target (£)</label><input id="g-target" type="number" inputmode="decimal" placeholder="1000"/></div>
           <div class="field"><label>Saved so far (£)</label><input id="g-saved" type="number" inputmode="decimal" placeholder="0"/></div>
         </div>
-        <div class="field"><label>Monthly contribution (£)</label><input id="g-monthly" type="number" inputmode="decimal" placeholder="0"/></div>
+        <div class="row2">
+          <div class="field"><label>Monthly contribution (£)</label><input id="g-monthly" type="number" inputmode="decimal" placeholder="0"/></div>
+          <div class="field"><label>Target date (optional)</label><input id="g-date" type="date"/></div>
+        </div>
         <button class="btn" id="save-goal">Save goal</button>
         <button class="btn ghost" id="cancel-goal">Cancel</button>
       </div>
     `;
 
     document.getElementById('income-input').onchange = e=>{ state.budgetIncome = parseFloat(e.target.value)||0; save(); renderAll(); };
+    document.getElementById('pf-monthly').onclick = ()=>{ state.settings.payFrequency='monthly'; save(); renderAll(); };
+    document.getElementById('pf-4weekly').onclick = ()=>{ state.settings.payFrequency='4weekly'; save(); renderAll(); };
+    const pd = document.getElementById('payday-input');
+    if (pd) pd.onchange = e=>{ state.settings.nextPayday = e.target.value || null; save(); renderAll(); };
     const nm = document.getElementById('new-month'); if (nm) nm.onclick = ()=>{ if (confirm('Reset all category spending to £0 and mark bills unpaid for the new month? Budgets stay as they are.')) startNewMonth(); };
 
     // bills
@@ -1057,10 +1282,11 @@
     document.getElementById('save-bill').onclick = ()=>{
       const name = document.getElementById('b-name').value.trim();
       const amount = parseFloat(document.getElementById('b-amount').value)||0;
+      const freq = document.getElementById('b-freq').value;
       const dueDay = parseInt(document.getElementById('b-due').value)||null;
       if (!name || amount<=0){ toast('A bill needs a name and an amount'); return; }
-      state.bills.push({ name, amount, dueDay, paid:false });
-      logActivity(`Added bill: ${name} (${fmt2(amount)}/mo)`);
+      state.bills.push({ name, amount, freq, dueDay, paid:false });
+      logActivity(`Added bill: ${name} (${freq==='annual'?fmt2(amount)+'/yr':fmt2(amount)+'/mo'})`);
       save(); renderAll();
     };
     el.querySelectorAll('[data-bill-paid]').forEach(btn=>{
@@ -1090,9 +1316,16 @@
     });
     el.querySelectorAll('[data-edit-cat]').forEach(btn=>{
       btn.onclick = ()=>{ const i=parseInt(btn.dataset.editCat); const c=state.categories[i];
-        const v = prompt(`Monthly budget for "${c.name}" (£):`, c.allocated);
-        const n = parseFloat(v);
-        if (!isNaN(n) && n>=0){ c.allocated=n; save(); renderAll(); } };
+        openSheet({
+          title: 'Edit ' + c.name,
+          fields: [{ id:'alloc', label:'Budget per month (£)', value: c.allocated }],
+          onSave: (v)=>{
+            const n = parseFloat(v.alloc);
+            if (isNaN(n) || n<0){ toast('Enter a valid amount'); return false; }
+            c.allocated = n; save(); renderAll();
+          }
+        });
+      };
     });
     const bvM = document.getElementById('bv-month'), bvW = document.getElementById('bv-week');
     if (bvM) bvM.onclick = ()=>{ state.settings.budgetView='month'; save(); renderBudget(); };
@@ -1106,23 +1339,29 @@
     });
     el.querySelectorAll('[data-spend]').forEach(btn=>{
       btn.onclick = ()=>{ const i=parseInt(btn.dataset.spend);
-        const amt = prompt(`Log spending in "${state.categories[i].name}" (£):`);
-        const val = parseFloat(amt);
-        if (!isNaN(val) && val>0){
-          const c = state.categories[i];
-          const prevSpent = Number(c.spent||0);
-          const activityTxt = `Spent ${fmt2(val)} on ${c.name}`;
-          c.spent = prevSpent + val;
-          c.entries = c.entries||[];
-          c.entries.push({ d:new Date().toISOString().slice(0,10), amt:val });
-          logActivity(activityTxt);
-          save(); renderAll();
-          toast(`${fmt2(val)} logged against ${c.name}`, ()=>{
-            c.spent = prevSpent;
-            c.entries.pop();
-            dropActivityHead(activityTxt);
-          });
-        } };
+        const c = state.categories[i];
+        openSheet({
+          title: 'Log spending — ' + c.name,
+          saveLabel: 'Log spend',
+          fields: [{ id:'amt', label:'Amount (£)', placeholder:'0' }],
+          onSave: (v)=>{
+            const val = parseFloat(v.amt);
+            if (isNaN(val) || val<=0){ toast('Enter an amount above zero'); return false; }
+            const prevSpent = Number(c.spent||0);
+            const activityTxt = `Spent ${fmt2(val)} on ${c.name}`;
+            c.spent = prevSpent + val;
+            c.entries = c.entries||[];
+            c.entries.push({ d:new Date().toISOString().slice(0,10), amt:val });
+            logActivity(activityTxt);
+            save(); renderAll();
+            toast(`${fmt2(val)} logged against ${c.name}`, ()=>{
+              c.spent = prevSpent;
+              c.entries.pop();
+              dropActivityHead(activityTxt);
+            });
+          }
+        });
+      };
     });
 
     // goals
@@ -1133,28 +1372,35 @@
       const target = parseFloat(document.getElementById('g-target').value)||0;
       const saved = parseFloat(document.getElementById('g-saved').value)||0;
       const monthly = parseFloat(document.getElementById('g-monthly').value)||0;
+      const targetDate = document.getElementById('g-date').value || null;
       if (!name || target<=0){ toast('A goal needs a name and a target'); return; }
-      state.goals.push({ name, target, saved, monthly });
+      state.goals.push({ name, target, saved, monthly, targetDate });
       logActivity(`Added goal: ${name} (${fmt(target)})`);
       save(); renderAll();
     };
     el.querySelectorAll('[data-goal-add]').forEach(btn=>{
       btn.onclick = ()=>{ const i=parseInt(btn.dataset.goalAdd);
-        const amt = prompt(`Add to "${state.goals[i].name}" (£):`, state.goals[i].monthly||'');
-        const val = parseFloat(amt);
-        if (!isNaN(val) && val>0){
-          const g = state.goals[i];
-          const prevSaved = Number(g.saved||0);
-          const activityTxt = `Saved ${fmt2(val)} into ${g.name}`;
-          g.saved = prevSaved + val;
-          logActivity(activityTxt);
-          save(); renderAll();
-          const hit = g.saved >= g.target;
-          toast(hit ? `${g.name} — target hit 🎉` : `${fmt2(val)} into ${g.name}`, ()=>{
-            g.saved = prevSaved;
-            dropActivityHead(activityTxt);
-          });
-        } };
+        const g = state.goals[i];
+        openSheet({
+          title: 'Add to ' + g.name,
+          saveLabel: 'Add it',
+          fields: [{ id:'amt', label:'Amount (£)', value: g.monthly||'', placeholder:'0' }],
+          onSave: (v)=>{
+            const val = parseFloat(v.amt);
+            if (isNaN(val) || val<=0){ toast('Enter an amount above zero'); return false; }
+            const prevSaved = Number(g.saved||0);
+            const activityTxt = `Saved ${fmt2(val)} into ${g.name}`;
+            g.saved = prevSaved + val;
+            logActivity(activityTxt);
+            save(); renderAll();
+            const hit = g.saved >= g.target;
+            toast(hit ? `${g.name} — target hit 🎉` : `${fmt2(val)} into ${g.name}`, ()=>{
+              g.saved = prevSaved;
+              dropActivityHead(activityTxt);
+            });
+          }
+        });
+      };
     });
     el.querySelectorAll('[data-remove-goal]').forEach(btn=>{
       btn.onclick = ()=>{ const i=parseInt(btn.dataset.removeGoal);
@@ -1216,20 +1462,36 @@
         </div>
       </div>
 
+      <div class="section"><span class="t-section">Security</span></div>
+      <div class="card">
+        <div class="card-row">
+          <div><div style="font-size:15px; font-weight:600;">PIN lock</div>
+          <div class="meta">${state.settings.pinHash ? 'On — asked for every time the app opens.' : 'Ask for a PIN when the app opens.'}</div></div>
+          <button class="mini-btn ${state.settings.pinHash?'':'accent'}" id="pin-toggle">${state.settings.pinHash?'Remove':'Set PIN'}</button>
+        </div>
+        <div class="micro" style="margin-top:8px;">Honest caveat: this stops casual snooping, not a determined person — the data itself isn't encrypted on the device.</div>
+      </div>
+
       <div class="section"><span class="t-section">Backup &amp; data</span></div>
       <div class="card">
-        <div class="t-help" style="margin-bottom:12px;">Everything lives on this device — nothing is sent anywhere. That's the privacy model, and it's also why backups matter: copy one out every so often.</div>
+        <div class="t-help" style="margin-bottom:12px;">Everything lives on this device — nothing is sent anywhere. That's the privacy model, and it's also why backups matter.${state.lastBackupAt ? ' Last backup: '+state.lastBackupAt.slice(0,10)+'.' : ' <b style="color:var(--clay)">Never backed up.</b>'}</div>
         <div class="row2">
           <button class="mini-btn" id="backup-copy">Copy backup</button>
           <button class="mini-btn" id="backup-restore">Restore</button>
+        </div>
+        <div class="row2" style="margin-top:10px">
+          <button class="mini-btn accent" id="backup-download">Download file</button>
+          <button class="mini-btn" id="backup-import-file">Import file</button>
         </div>
         <div class="row2" style="margin-top:10px">
           <button class="mini-btn" id="import-excel">Import sheet</button>
           <button class="mini-btn" id="export-csv">Export CSV</button>
         </div>
         <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" style="display:none"/>
+        <input type="file" id="json-file" accept=".json,application/json" style="display:none"/>
         <textarea id="backup-box" placeholder="Backup text appears here / paste here to restore" style="display:none; width:100%; margin-top:12px; background:var(--bg); border:1px solid var(--line); color:var(--text); border-radius:8px; font-family:var(--mono); font-size:12px; padding:10px; min-height:80px;"></textarea>
         <div id="backup-msg" class="t-help" style="margin-top:10px; display:none;"></div>
+        <div class="micro" style="margin-top:10px;">Moving to another device? Download the file here, then Import file there — that's the sync ritual.</div>
       </div>
 
       <div class="section"><span class="t-section">Activity log</span></div>
@@ -1241,8 +1503,15 @@
 
       <div class="section"><span class="t-section">About</span></div>
       <div class="card">
-        <div class="t-help">Runway is a private, offline-first finance tracker. No account, no bank connection, no subscription. Your figures never leave this device unless you export them yourself.</div>
-        <div class="micro" style="margin-top:10px;">Assumptions the projections make: interest compounds monthly at the stated APR; minimum payments stay fixed; when a debt clears, its minimum rolls into the attack; 0% promos revert to their stated post-promo rate on the end date.</div>
+        <div class="t-help">Runway is a private, offline-first finance tracker. No account, no bank connection, no subscription. Your figures never leave this device unless you export them yourself. Reminders are in-app only — a saved web app can't send notifications when it's closed, and Runway doesn't pretend otherwise.</div>
+        <div class="micro" style="margin-top:10px;">Assumptions the projections make: interest compounds monthly at the stated APR (fixed/HP loans accrue nothing — their interest is already in the balance); minimum payments stay fixed; when a debt clears, its minimum rolls into the attack; 0% promos revert to their stated post-promo rate on the end date.</div>
+      </div>
+
+      <div class="section"><span class="t-section">Diagnostics</span></div>
+      <div class="card">
+        <div class="t-help" style="margin-bottom:12px;">Six checks that verify the payoff engine against independently calculated answers — amortisation maths, promo flips, rollover, and more.</div>
+        <button class="mini-btn accent" id="run-tests" style="width:100%;">Run self-tests</button>
+        <div id="test-results" style="margin-top:10px;"></div>
       </div>
     `;
     document.getElementById('show-acct-form').onclick = ()=> document.getElementById('acct-form').classList.add('open');
@@ -1258,9 +1527,16 @@
     };
     el.querySelectorAll('[data-edit-acct]').forEach(btn=>{
       btn.onclick = ()=>{ const i=parseInt(btn.dataset.editAcct); const a=state.accounts[i];
-        const v = prompt(`Balance of "${a.name}" (£):`, a.balance);
-        const n = parseFloat(v);
-        if (!isNaN(n)){ a.balance=n; logActivity(`Updated ${a.name} balance to ${fmt2(n)}`); save(); renderAll(); } };
+        openSheet({
+          title: 'Update ' + a.name,
+          fields: [{ id:'bal', label:'Current balance (£)', value: a.balance }],
+          onSave: (v)=>{
+            const n = parseFloat(v.bal);
+            if (isNaN(n)){ toast('Enter a valid balance'); return false; }
+            a.balance = n; logActivity(`Updated ${a.name} balance to ${fmt2(n)}`); save(); renderAll();
+          }
+        });
+      };
     });
     el.querySelectorAll('[data-remove-acct]').forEach(btn=>{
       btn.onclick = ()=>{ const i=parseInt(btn.dataset.removeAcct);
@@ -1268,6 +1544,64 @@
     });
     document.getElementById('theme-dark').onclick = ()=>{ state.settings.theme='dark'; applyTheme(); save(); renderMore(); };
     document.getElementById('theme-light').onclick = ()=>{ state.settings.theme='light'; applyTheme(); save(); renderMore(); };
+
+    // PIN lock
+    document.getElementById('pin-toggle').onclick = ()=>{
+      if (state.settings.pinHash){
+        openSheet({ title:'Remove PIN lock', saveLabel:'Remove', fields:[{id:'pin', label:'Current PIN', type:'password'}],
+          onSave: (v)=>{ sha256(v.pin).then(h=>{
+            if (h === state.settings.pinHash){ state.settings.pinHash=null; save(); renderMore(); toast('PIN removed'); }
+            else toast("That PIN doesn't match");
+          }); } });
+      } else {
+        openSheet({ title:'Set a PIN', saveLabel:'Set PIN', fields:[{id:'pin', label:'New PIN (4–8 digits)', type:'password'},{id:'pin2', label:'Repeat it', type:'password'}],
+          onSave: (v)=>{
+            if (!/^\d{4,8}$/.test(v.pin)){ toast('PIN needs to be 4–8 digits'); return false; }
+            if (v.pin !== v.pin2){ toast("They don't match — try again"); return false; }
+            sha256(v.pin).then(h=>{ state.settings.pinHash=h; save(); renderMore(); toast('PIN set — asked on every open'); });
+          } });
+      }
+    };
+
+    // file backup / restore
+    document.getElementById('backup-download').onclick = ()=>{
+      try {
+        const blob = new Blob([JSON.stringify(state, null, 1)], {type:'application/json'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'runway-backup-' + new Date().toISOString().slice(0,10) + '.json';
+        a.click();
+        state.lastBackupAt = new Date().toISOString();
+        save(); renderMore();
+        toast('Backup file downloaded');
+      } catch(e){ toast('Download blocked here — use Copy backup instead'); }
+    };
+    const jsonInput = document.getElementById('json-file');
+    document.getElementById('backup-import-file').onclick = ()=> jsonInput.click();
+    jsonInput.onchange = async (e)=>{
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const parsed = JSON.parse(await file.text());
+        if (!parsed || typeof parsed!=='object' || !Array.isArray(parsed.debts)) throw new Error('bad');
+        if (!confirm('Replace everything on this device with the backup file? This cannot be undone.')){ jsonInput.value=''; return; }
+        state = migrate(parsed);
+        logActivity('Restored from backup file');
+        save(); applyTheme(); renderAll();
+        toast('Restored from file');
+      } catch(err){ toast("That file doesn't look like a Runway backup"); }
+      jsonInput.value='';
+    };
+
+    // self-tests
+    document.getElementById('run-tests').onclick = ()=>{
+      const results = runSelfTests();
+      const passed = results.filter(r=>r.pass).length;
+      document.getElementById('test-results').innerHTML =
+        `<div class="t-help" style="margin-bottom:8px; color:${passed===results.length?'var(--sage)':'var(--clay)'}">${passed}/${results.length} passed</div>` +
+        results.map(r=>`<div class="activity-item"><span class="${r.pass?'test-pass':'test-fail'}">${r.pass?'✓':'✗'} ${esc(r.name)}</span><span class="t-micro">${esc(r.detail)}</span></div>`).join('');
+    };
+
     wireBackup();
     document.getElementById('export-csv').onclick = ()=>{
       try {
@@ -1297,6 +1631,8 @@
     document.getElementById('backup-copy').onclick = async ()=>{
       const data = JSON.stringify(state);
       box.style.display='block'; box.value=data; box.select();
+      state.lastBackupAt = new Date().toISOString();
+      save();
       try { await navigator.clipboard.writeText(data); note('Copied — paste it somewhere safe (notes app, message to yourself).', true); }
       catch(e){ note('Clipboard blocked — long-press the text above and copy it manually.', false); }
     };

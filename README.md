@@ -28,6 +28,19 @@ Most debt payoff apps put their best features behind a paywall and their worst b
 - Bills and recurring commitments with due-day reminders and paid tracking
 - Savings goals with progress tracking
 
+**Real-world money handling**
+- 4-weekly pay cycle support: per-packet income, monthly-equivalent budgeting (13 packets/year), and automatic detection of your double-payday bonus month
+- Fixed-interest / HP loan support: precomputed-interest debts accrue nothing in the simulation and are deprioritised for overpayment, matching how car finance actually works
+- Promo-expiry-first strategy alongside avalanche, snowball, and custom ordering
+- Annual bills shown as monthly equivalents
+
+**Trust & durability**
+- Built-in self-test suite: six checks verifying the payoff engine against independently derived answers (closed-form amortisation, promo flips, minimum rollover, clamping)
+- Backup nudges after 30 days, timestamped backups, and downloadable .json backup files for device-to-device transfer
+- Optional PIN lock (honestly documented as a deterrent, not encryption)
+- Undo on payments, spends, and goal contributions
+- Native bottom sheets for all data entry — no browser prompt() dialogs
+
 **Foundation**
 - Accounts layer and monthly net-position snapshots
 - Activity log of every payment, spend and change

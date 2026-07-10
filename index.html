@@ -20,7 +20,20 @@
     --sans:'Space Grotesk','Segoe UI',sans-serif;
     --r:10px; --sp:16px;
   }
+  [data-theme="light"]{
+    --bg:#f4f2ec; --panel:#ffffff; --panel-hi:#efece4; --line:#ddd7ca;
+    --text:#1e242e; --text-2:#4c5564; --text-3:#727b8a;
+    --amber:#a06f1d; --amber-dim:#ecdfc2;
+    --sage:#3d7a4a; --sage-dim:#d9e8dc;
+    --clay:#b04a50; --clay-dim:#f0dcdd;
+  }
   * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  .ob-step { font-family:var(--mono); font-size:12px; color:var(--text-3); letter-spacing:0.08em; text-transform:uppercase; margin-bottom:8px; }
+  .ord-btn { background:transparent; border:1px solid var(--line); color:var(--text-2); border-radius:7px; width:42px; min-height:38px; font-size:15px; }
+  .ord-btn:active { border-color:var(--amber); color:var(--amber); }
+  .seg { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; }
+  .seg button { flex:1; background:transparent; border:none; color:var(--text-2); font-family:var(--mono); font-size:12px; padding:9px 0; text-transform:uppercase; min-height:38px; }
+  .seg button.active { background:var(--amber-dim); color:var(--amber); }
   body { margin:0; background:var(--bg); }
   #app-root { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; max-width:480px; margin:0 auto; padding-bottom:92px; font-size:15px; line-height:1.5; }
 
@@ -167,20 +180,31 @@
   let loaded=false, storageOk=null, warnedOnce=false, editingIndex=null, currentView='home';
 
   function defaults(){
-    return { debts:[], categories:[], bills:[], goals:[], activity:[],
+    return { debts:[], categories:[], bills:[], goals:[], activity:[], accounts:[], snapshots:[],
       budgetIncome:0, strategy:'avalanche', extraPayment:0, lumpSum:0,
+      settings:{ theme:'dark', budgetView:'month' },
+      onboarded:false,
       monthKey: monthKeyNow() };
   }
   function monthKeyNow(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
   function migrate(s){
     const base = defaults();
     s = { ...base, ...s };
-    s.debts = (s.debts||[]).map(d => ({ payments:[], promoEnd:null, postPromoApr:null, dueDay:null, ...d }));
+    s.settings = { ...base.settings, ...(s.settings||{}) };
+    s.debts = (s.debts||[]).map((d,i) => ({ payments:[], promoEnd:null, postPromoApr:null, dueDay:null, ord:i, ...d }));
+    s.debts.forEach((d,i)=>{ if (d.ord==null) d.ord=i; });
     s.bills = (s.bills||[]).map(b => ({ paid:false, ...b }));
     s.goals = s.goals||[];
     s.activity = s.activity||[];
+    s.accounts = s.accounts||[];
+    s.snapshots = s.snapshots||[];
+    s.categories = (s.categories||[]).map(c => ({ entries:[], rollover:false, carry:0, ...c }));
+    // existing users skip onboarding
+    if (s.debts.length || Number(s.budgetIncome)>0 || s.categories.length) s.onboarded = true;
     return s;
   }
+  function applyTheme(){ document.documentElement.setAttribute('data-theme', (state.settings&&state.settings.theme)||'dark');
+    const tc=document.querySelector('meta[name="theme-color"]'); if (tc) tc.content = state.settings.theme==='light' ? '#f4f2ec' : '#10141a'; }
 
   async function load(){
     try {
@@ -243,6 +267,12 @@
     if (d.promoEnd) return (d.postPromoApr!=null && d.postPromoApr!=='') ? Number(d.postPromoApr) : Number(d.apr)||0;
     return Number(d.apr)||0;
   }
+  function debtSorter(strategy, when){
+    const balOf = d => d.bal !== undefined ? d.bal : Number(d.balance);
+    if (strategy==='custom') return (a,b)=> (a.ord??999)-(b.ord??999);
+    if (strategy==='snowball') return (a,b)=> balOf(a)-balOf(b);
+    return (a,b)=>{ const diff = effApr(b,when)-effApr(a,when); return diff !== 0 ? diff : balOf(a)-balOf(b); };
+  }
   function simulate(strategy, extra, lump){
     const src = activeDebts();
     if (!src.length) return null;
@@ -250,7 +280,7 @@
     const now = new Date();
     // apply lump sum now to strategy target
     if (lump > 0){
-      const order = [...ds].sort(strategy==='avalanche' ? (a,b)=>effApr(b,now)-effApr(a,now)||a.bal-b.bal : (a,b)=>a.bal-b.bal);
+      const order = [...ds].sort(debtSorter(strategy, now));
       let rem = lump;
       for (const d of order){ if (rem<=0) break; const p=Math.min(rem,d.bal); d.bal-=p; rem-=p; }
     }
@@ -264,7 +294,7 @@
       ds.forEach(d=>{ if(d.bal<=0)return; const i=d.bal*(effApr(d,cur)/100/12); d.bal+=i; totalInterest+=i; });
       let remaining = totalBudget;
       ds.forEach(d=>{ if(d.bal>0){ const p=Math.min(Number(d.minPayment||0),d.bal); d.bal-=p; remaining-=p; } });
-      const order = ds.filter(d=>d.bal>0).sort(strategy==='avalanche' ? (a,b)=>effApr(b,cur)-effApr(a,cur)||a.bal-b.bal : (a,b)=>a.bal-b.bal);
+      const order = ds.filter(d=>d.bal>0).sort(debtSorter(strategy, cur));
       for (const d of order){ if(remaining<=0)break; const p=Math.min(remaining,d.bal); d.bal-=p; remaining-=p; }
       ds.forEach(d=>{ if(d.bal<=0.005 && payoffs[d.name]===undefined){ payoffs[d.name]=month; d.bal=0; } });
       series.push(ds.reduce((s,d)=>s+d.bal,0));
@@ -358,12 +388,15 @@
       }
     }
     // 2) strategy target
-    const target = [...act].sort(state.strategy==='avalanche' ? (a,b)=>effApr(b,now)-effApr(a,now)||a.balance-b.balance : (a,b)=>a.balance-b.balance)[0];
+    const target = [...act].sort(debtSorter(state.strategy, now))[0];
     if (state.strategy==='avalanche')
       return { title:`Anything spare goes on ${target.name}`,
         why:`It's your most expensive debt at ${effApr(target,now)}% — every £100 paid off it saves about ${fmt2(100*(effApr(target,now)/100/12))} in interest every month from now on.` };
+    if (state.strategy==='snowball')
+      return { title:`Anything spare goes on ${target.name}`,
+        why:`It's your smallest balance at ${fmt(target.balance)} — clearing it frees up ${fmt2(target.minPayment)}/month and gives you a quick win.` };
     return { title:`Anything spare goes on ${target.name}`,
-      why:`It's your smallest balance at ${fmt(target.balance)} — clearing it frees up ${fmt2(target.minPayment)}/month and gives you a quick win.` };
+      why:`It's first in your custom order. Worth knowing: at ${effApr(target,now)}% it costs about ${fmt2(target.balance*(effApr(target,now)/100/12))}/month in interest right now.` };
   }
 
   // ---------- month rollover ----------
@@ -373,8 +406,28 @@
     }
     return false;
   }
+  function netPosition(){
+    const assets = state.accounts.reduce((s,a)=>s+Number(a.balance||0),0) + state.goals.reduce((s,g)=>s+Number(g.saved||0),0);
+    const owed = state.debts.reduce((s,d)=>s+Number(d.balance||0),0);
+    return { assets, owed, net: assets - owed };
+  }
+  function takeSnapshot(){
+    const np = netPosition();
+    const k = monthKeyNow();
+    state.snapshots = state.snapshots.filter(s=>s.k!==k);
+    state.snapshots.push({ k, owed:np.owed, assets:np.assets, net:np.net });
+    if (state.snapshots.length > 36) state.snapshots = state.snapshots.slice(-36);
+  }
   function startNewMonth(){
-    state.categories.forEach(c=> c.spent = 0);
+    takeSnapshot();
+    state.categories.forEach(c=>{
+      if (c.rollover){
+        const eff = Number(c.allocated||0) + Number(c.carry||0);
+        c.carry = Math.max(0, eff - Number(c.spent||0));
+      } else c.carry = 0;
+      c.spent = 0;
+      c.entries = [];
+    });
     state.bills.forEach(b=> b.paid = false);
     state.monthKey = monthKeyNow();
     logActivity('Started a new budget month');
@@ -421,9 +474,76 @@
     else toast(`${fmt2(val)} logged — ${d.name} now ${fmt2(d.balance)}`);
   }
 
+  // ================= ONBOARDING =================
+  let obStep = 0;
+  function renderOnboarding(el){
+    const steps = 3;
+    const debtRows = state.debts.map((d,i)=>`<div class="activity-item"><span>${esc(d.name)} — ${fmt(d.balance)} @ ${d.apr}%</span><span class="t-micro">${fmt2(d.minPayment)}/mo</span></div>`).join('');
+    let body='';
+    if (obStep===0) body = `
+      <div class="ob-step">step 1 of ${steps}</div>
+      <div class="t-card">What comes in each month?</div>
+      <div class="t-help" style="margin:8px 0 14px;">Your take-home pay. Everything else — what to pay first, what's safe to spend — builds on this one number. A rough figure is fine; you can change it any time.</div>
+      <div class="field"><label>Take-home per month (£)</label><input id="ob-income" type="number" inputmode="decimal" value="${state.budgetIncome||''}" placeholder="e.g. 1400"/></div>
+      <button class="btn" id="ob-next">Next</button>`;
+    else if (obStep===1) body = `
+      <div class="ob-step">step 2 of ${steps}</div>
+      <div class="t-card">What do you owe?</div>
+      <div class="t-help" style="margin:8px 0 14px;">Add each debt — card, loan, car finance, BNPL. Balance, interest rate and minimum payment is all it takes. Add as many as you have, then continue.</div>
+      ${state.debts.length ? `<div class="card" style="padding:6px 16px; margin-bottom:12px;">${debtRows}</div>` : ''}
+      <div class="field"><label>Name</label><input id="ob-dname" placeholder="e.g. Credit card"/></div>
+      <div class="row2">
+        <div class="field"><label>Balance (£)</label><input id="ob-dbal" type="number" inputmode="decimal" placeholder="0"/></div>
+        <div class="field"><label>APR (%)</label><input id="ob-dapr" type="number" inputmode="decimal" placeholder="0"/></div>
+      </div>
+      <div class="field"><label>Minimum payment / month (£)</label><input id="ob-dmin" type="number" inputmode="decimal" placeholder="0"/></div>
+      <button class="btn ghost" id="ob-add-debt" style="margin-top:0; margin-bottom:8px;">+ Add this debt</button>
+      <button class="btn" id="ob-next">${state.debts.length?'Continue':'I have no debts'}</button>`;
+    else body = `
+      <div class="ob-step">step 3 of ${steps}</div>
+      <div class="t-card">How hard do you want to push?</div>
+      <div class="t-help" style="margin:8px 0 14px;">Anything you can spare above the minimums goes straight at your priority debt and pulls your debt-free date closer. £0 is fine to start — the Plan tab will show you exactly what each extra £50 buys.</div>
+      <div class="field"><label>Extra toward debt each month (£)</label><input id="ob-extra" type="number" inputmode="decimal" value="${state.extraPayment||''}" placeholder="0"/></div>
+      <button class="btn" id="ob-finish">Build my plan</button>`;
+    el.innerHTML = `
+      <div class="card hi" style="padding:22px 18px;">
+        <div class="t-micro" style="text-transform:uppercase; letter-spacing:0.1em; margin-bottom:6px;">welcome to runway</div>
+        ${body}
+        <button class="btn ghost" id="ob-skip" style="font-size:13px;">Skip setup — I'll do it myself</button>
+      </div>
+      <div class="t-help" style="text-align:center; color:var(--text-3); padding:0 12px;">Everything stays on this device. No account, no bank connection.</div>`;
+    const skip = document.getElementById('ob-skip');
+    skip.onclick = ()=>{ state.onboarded=true; save(); renderAll(); };
+    const next = document.getElementById('ob-next');
+    if (next) next.onclick = ()=>{
+      if (obStep===0){ state.budgetIncome = parseFloat(document.getElementById('ob-income').value)||0; save(); }
+      obStep++; renderHome();
+    };
+    const addD = document.getElementById('ob-add-debt');
+    if (addD) addD.onclick = ()=>{
+      const name = document.getElementById('ob-dname').value.trim();
+      const balance = parseFloat(document.getElementById('ob-dbal').value)||0;
+      const apr = parseFloat(document.getElementById('ob-dapr').value)||0;
+      const minPayment = parseFloat(document.getElementById('ob-dmin').value)||0;
+      if (!name || balance<=0){ toast('Needs a name and a balance'); return; }
+      state.debts.push({ name, balance, original:balance, apr, minPayment, promoEnd:null, postPromoApr:null, payments:[], ord:state.debts.length });
+      save(); renderHome();
+    };
+    const fin = document.getElementById('ob-finish');
+    if (fin) fin.onclick = ()=>{
+      state.extraPayment = Math.max(0, parseFloat(document.getElementById('ob-extra').value)||0);
+      state.onboarded = true;
+      logActivity('Completed setup');
+      takeSnapshot();
+      save(); renderAll();
+      toast('Plan built — this is your command centre');
+    };
+  }
+
   // ================= HOME =================
   function renderHome(){
     const el = document.getElementById('view-home');
+    if (!state.onboarded){ renderOnboarding(el); return; }
     const m = money();
     const totalOwed = state.debts.reduce((s,d)=>s+Number(d.balance||0),0);
     const totalOriginal = state.debts.reduce((s,d)=>s+Number(d.original||d.balance||0),0);
@@ -477,6 +597,21 @@
         <div class="stat"><div class="t-micro">committed monthly</div><div class="t-stat">${fmt(m.billsTotal+m.minTotal)}</div><div class="t-micro">bills ${fmt(m.billsTotal)} + minimums ${fmt(m.minTotal)}</div></div>
         <div class="stat"><div class="t-micro">attacking debt with</div><div class="t-stat" style="color:var(--amber)">${fmt(m.extra)}</div><div class="t-micro">extra per month — set on Plan</div></div>
       </div>
+      ${(()=>{
+        const np = netPosition();
+        if (!state.accounts.length && !state.goals.length) return '';
+        const prev = state.snapshots.length>1 ? state.snapshots[state.snapshots.length-2] : (state.snapshots.length===1 && state.snapshots[0].k!==monthKeyNow() ? state.snapshots[0] : null);
+        const delta = prev ? np.net - prev.net : null;
+        return `<div class="card" style="margin-top:12px;">
+          <div class="card-row">
+            <div><div class="t-micro" style="text-transform:uppercase; letter-spacing:0.08em;">net position</div>
+            <div class="t-stat" style="color:${np.net<0?'var(--clay)':'var(--sage)'}; margin-top:4px;">${np.net<0?'−':''}${fmt(Math.abs(np.net))}</div>
+            <div class="t-micro">${fmt(np.assets)} in accounts &amp; savings − ${fmt(np.owed)} owed</div></div>
+            ${delta!=null && Math.abs(delta)>0.5 ? `<span class="badge ${delta>=0?'ok':'warn'}">${delta>=0?'+':'−'}${fmt(Math.abs(delta))} vs last month</span>` : ''}
+          </div>
+          <div class="t-micro" style="margin-top:8px;">Every payment moves this up — negative is normal mid-payoff. Manage accounts in More.</div>
+        </div>`;
+      })()}
 
       <div class="section"><span class="t-section">Quick actions</span></div>
       <div class="quick-actions">
@@ -526,7 +661,9 @@
 
     const stratWhy = state.strategy==='avalanche'
       ? `Avalanche targets the highest interest rate first — it's the cheapest route mathematically. Trade-off: your first cleared debt may take longer, so it needs patience.`
-      : `Snowball targets the smallest balance first — quick wins keep motivation up. Trade-off: it usually costs a bit more in interest than avalanche.`;
+      : state.strategy==='snowball'
+      ? `Snowball targets the smallest balance first — quick wins keep motivation up. Trade-off: it usually costs a bit more in interest than avalanche.`
+      : `Custom means you choose the order — drag debts up and down on the Debts tab with the arrows. Useful when something matters more than maths: a debt to family, collateral being held, or a promo you're managing by hand.`;
     const stratDiff = (simOther && simOther.finished && simMain.finished) ? simOther.totalInterest - simMain.totalInterest : null;
 
     const scenRow = (label, s) => s && s.finished
@@ -539,6 +676,7 @@
         <div class="strategy-toggle">
           <button id="strat-aval" class="${state.strategy==='avalanche'?'active':''}">Avalanche</button>
           <button id="strat-snow" class="${state.strategy==='snowball'?'active':''}">Snowball</button>
+          <button id="strat-cust" class="${state.strategy==='custom'?'active':''}">Custom</button>
         </div>
         <div class="t-help">${stratWhy}</div>
         ${stratDiff!=null && Math.abs(stratDiff)>0.5 ? `<div class="t-help" style="margin-top:8px; color:${stratDiff>0?'var(--sage)':'var(--clay)'}">Right now, ${state.strategy} ${stratDiff>0?'saves you':'costs you'} ${fmt(Math.abs(stratDiff))} in interest compared to ${other}.</div>` : ''}
@@ -599,6 +737,14 @@
     `;
     document.getElementById('strat-aval').onclick = ()=>{ state.strategy='avalanche'; logActivity('Switched strategy to avalanche'); save(); renderAll(); };
     document.getElementById('strat-snow').onclick = ()=>{ state.strategy='snowball'; logActivity('Switched strategy to snowball'); save(); renderAll(); };
+    document.getElementById('strat-cust').onclick = ()=>{
+      // seed custom order from current sorted order so it starts sensible
+      const now2 = new Date();
+      const sorted = [...activeDebts()].sort(debtSorter(state.strategy==='custom'?'avalanche':state.strategy, now2));
+      sorted.forEach((d,i)=> d.ord = i);
+      state.debts.filter(d=>Number(d.balance)<=0).forEach((d,i)=> d.ord = sorted.length+i);
+      state.strategy='custom'; logActivity('Switched to custom debt order'); save(); renderAll();
+    };
     document.getElementById('extra-input').onchange = e=>{ state.extraPayment = Math.max(0, parseFloat(e.target.value)||0); logActivity(`Set extra debt payment to ${fmt(state.extraPayment)}/mo`); save(); renderAll(); };
     document.getElementById('lump-input').onchange = e=>{ state.lumpSum = Math.max(0, parseFloat(e.target.value)||0); save(); renderPlan(); };
   }
@@ -608,9 +754,7 @@
     const el = document.getElementById('view-debts');
     const now = new Date();
     const simMain = simulate(state.strategy, state.extraPayment, 0);
-    const act = activeDebts().sort(state.strategy==='avalanche'
-      ? (a,b)=>effApr(b,now)-effApr(a,now)||Number(a.balance)-Number(b.balance)
-      : (a,b)=>Number(a.balance)-Number(b.balance));
+    const act = activeDebts().sort(debtSorter(state.strategy, now));
     const done = state.debts.filter(d=>Number(d.balance)<=0);
 
     let list = act.length||done.length ? '' : `<div class="empty">No debts yet. Add each card, loan or plan below — balance, rate and minimum payment is all it needs to build your payoff plan.</div>`;
@@ -643,6 +787,9 @@
         <div class="row2" style="margin-top:12px">
           <button class="mini-btn accent" data-pay="${realIdx}">Log payment</button>
           <button class="mini-btn" data-edit="${realIdx}">Edit</button>
+          ${state.strategy==='custom' ? `
+            <button class="ord-btn" data-move-up="${idx}" aria-label="Move up" ${idx===0?'disabled style="opacity:0.3"':''}>▲</button>
+            <button class="ord-btn" data-move-down="${idx}" aria-label="Move down" ${idx===act.length-1?'disabled style="opacity:0.3"':''}>▼</button>` : ''}
         </div>
         <details class="debt-detail">
           <summary>History &amp; more</summary>
@@ -720,6 +867,14 @@
     el.querySelectorAll('[data-pay]').forEach(btn=>{
       btn.onclick = ()=> logPayment(parseInt(btn.dataset.pay));
     });
+    const swapOrd = (i, j) => {
+      const sorted = activeDebts().sort(debtSorter('custom', now));
+      if (!sorted[i] || !sorted[j]) return;
+      const t = sorted[i].ord; sorted[i].ord = sorted[j].ord; sorted[j].ord = t;
+      save(); renderAll();
+    };
+    el.querySelectorAll('[data-move-up]').forEach(btn=>{ btn.onclick = ()=> swapOrd(parseInt(btn.dataset.moveUp), parseInt(btn.dataset.moveUp)-1); });
+    el.querySelectorAll('[data-move-down]').forEach(btn=>{ btn.onclick = ()=> swapOrd(parseInt(btn.dataset.moveDown), parseInt(btn.dataset.moveDown)+1); });
   }
 
   // ================= BUDGET =================
@@ -730,33 +885,48 @@
     const monthPct = (now.getDate()/daysInMonth)*100;
     const m = money();
 
+    const weekly = state.settings.budgetView === 'week';
+    // current week: Monday start
+    const dow = (now.getDay()+6)%7; // 0=Mon
+    const weekStart = new Date(now); weekStart.setDate(now.getDate()-dow); weekStart.setHours(0,0,0,0);
+    const weekPct = ((dow+1)/7)*100;
+    const inWeek = iso => { const d = new Date(iso+'T12:00:00'); return d >= weekStart; };
+
     let catList = state.categories.length ? '' : `<div class="empty">No spending categories yet. Add the flexible ones — groceries, fuel, going out — and log spends against them as you go.</div>`;
     state.categories.forEach((c, idx)=>{
-      const spent=Number(c.spent||0), allocated=Number(c.allocated||0);
+      const carry = c.rollover ? Number(c.carry||0) : 0;
+      const effAlloc = Number(c.allocated||0) + carry;
+      const monthSpent = Number(c.spent||0);
+      const weekSpent = (c.entries||[]).filter(e=>inWeek(e.d)).reduce((s,e)=>s+Number(e.amt||0),0);
+      const allocated = weekly ? effAlloc*(7/daysInMonth) : effAlloc;
+      const spent = weekly ? weekSpent : monthSpent;
+      const periodPct = weekly ? weekPct : monthPct;
+      const periodWord = weekly ? 'week' : 'month';
       const pct = allocated>0 ? (spent/allocated)*100 : 0;
-      const paceTarget = allocated*(monthPct/100);
+      const paceTarget = allocated*(periodPct/100);
       const over = spent>allocated && allocated>0;
-      const ahead = spent - paceTarget; // + means spending faster than the calendar
+      const ahead = spent - paceTarget;
       let paceCopy, badge, barColor;
-      if (over){ paceCopy = `${fmt2(spent-allocated)} over — trim elsewhere or top this up`; badge='<span class="badge warn">over</span>'; barColor='var(--clay)'; }
+      if (over){ paceCopy = `${fmt2(spent-allocated)} over this ${periodWord} — trim elsewhere or top this up`; badge='<span class="badge warn">over</span>'; barColor='var(--clay)'; }
       else if (allocated<=0){ paceCopy = 'No budget set'; badge=''; barColor='var(--line)'; }
       else if (ahead > allocated*0.08){ paceCopy = `By today you'd be on track under ${fmt(paceTarget)} — you're ${fmt2(ahead)} ahead of pace`; badge='<span class="badge priority">fast pace</span>'; barColor='var(--amber)'; }
-      else { paceCopy = `${fmt2(allocated-spent)} left · ${ahead<-1 ? fmt2(-ahead)+' under pace — nicely done' : 'right on pace'}`; badge='<span class="badge ok">on track</span>'; barColor='var(--sage)'; }
+      else { paceCopy = `${fmt2(allocated-spent)} left this ${periodWord} · ${ahead<-1 ? fmt2(-ahead)+' under pace — nicely done' : 'right on pace'}`; badge='<span class="badge ok">on track</span>'; barColor='var(--sage)'; }
       catList += `<div class="card">
         <div class="card-row">
           <div><div class="t-card">${esc(c.name)}</div>
-          <div class="meta">${fmt2(spent)} of ${fmt(allocated)}</div></div>
+          <div class="meta">${fmt2(spent)} of ${fmt(allocated)}${weekly?' this week':''}${!weekly && carry>0?' (incl. '+fmt(carry)+' rolled over)':''}</div></div>
           ${badge}
         </div>
         <div class="bar-track">
           <div class="bar-fill" style="width:${Math.min(pct,100)}%; background:${barColor}"></div>
-          ${allocated>0?`<div class="bar-pace" style="left:${Math.min(monthPct,100)}%" title="where today sits in the month"></div>`:''}
+          ${allocated>0?`<div class="bar-pace" style="left:${Math.min(periodPct,100)}%" title="where today sits in the ${periodWord}"></div>`:''}
         </div>
         <div class="micro">${paceCopy}</div>
         <div class="row2" style="margin-top:12px">
           <button class="mini-btn accent" data-spend="${idx}">Log spend</button>
           <button class="mini-btn" data-edit-cat="${idx}">Edit</button>
-          <button class="mini-btn" data-remove-cat="${idx}">Remove</button>
+          <button class="mini-btn ${c.rollover?'accent':''}" data-rollover="${idx}">${c.rollover?'rollover ✓':'rollover off'}</button>
+          <button class="mini-btn" data-remove-cat="${idx}">×</button>
         </div>
       </div>`;
     });
@@ -818,7 +988,10 @@
       </div>
 
       <div class="section"><span class="t-section">Spending categories</span>
-        ${state.categories.length?'<button class="mini-btn" id="new-month">start new month</button>':''}
+        <span style="display:flex; gap:8px; align-items:center;">
+          ${state.categories.length?`<span class="seg" style="width:132px;"><button id="bv-month" class="${!weekly?'active':''}">Month</button><button id="bv-week" class="${weekly?'active':''}">Week</button></span>`:''}
+          ${state.categories.length?'<button class="mini-btn" id="new-month">reset month</button>':''}
+        </span>
       </div>
       ${catList}
       <button class="plus" id="show-cat-form">+ add category</button>
@@ -890,15 +1063,28 @@
         const n = parseFloat(v);
         if (!isNaN(n) && n>=0){ c.allocated=n; save(); renderAll(); } };
     });
+    const bvM = document.getElementById('bv-month'), bvW = document.getElementById('bv-week');
+    if (bvM) bvM.onclick = ()=>{ state.settings.budgetView='month'; save(); renderBudget(); };
+    if (bvW) bvW.onclick = ()=>{ state.settings.budgetView='week'; save(); renderBudget(); };
+    el.querySelectorAll('[data-rollover]').forEach(btn=>{
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.rollover); const c=state.categories[i];
+        c.rollover = !c.rollover;
+        if (!c.rollover) c.carry = 0;
+        toast(c.rollover ? `${c.name}: unspent money now rolls into next month` : `${c.name}: rollover off`);
+        save(); renderBudget(); };
+    });
     el.querySelectorAll('[data-spend]').forEach(btn=>{
       btn.onclick = ()=>{ const i=parseInt(btn.dataset.spend);
         const amt = prompt(`Log spending in "${state.categories[i].name}" (£):`);
         const val = parseFloat(amt);
         if (!isNaN(val) && val>0){
-          state.categories[i].spent = Number(state.categories[i].spent||0)+val;
-          logActivity(`Spent ${fmt2(val)} on ${state.categories[i].name}`);
+          const c = state.categories[i];
+          c.spent = Number(c.spent||0)+val;
+          c.entries = c.entries||[];
+          c.entries.push({ d:new Date().toISOString().slice(0,10), amt:val });
+          logActivity(`Spent ${fmt2(val)} on ${c.name}`);
           save(); renderAll();
-          toast(`${fmt2(val)} logged against ${state.categories[i].name}`);
+          toast(`${fmt2(val)} logged against ${c.name}`);
         } };
     });
 
@@ -935,7 +1121,57 @@
   // ================= MORE =================
   function renderMore(){
     const el = document.getElementById('view-more');
+    const np = netPosition();
+    let acctList = state.accounts.length ? '' : `<div class="empty">Add where your money sits — current account, savings, cash. Together with goals it builds your net position on Home.</div>`;
+    state.accounts.forEach((a, idx)=>{
+      acctList += `<div class="card" style="padding:13px 16px;">
+        <div class="card-row">
+          <div><div style="font-size:15px; font-weight:600;">${esc(a.name)}</div>
+          <div class="meta">${esc(a.type||'account')}</div></div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span class="t-stat" style="font-size:16px;">${fmt2(a.balance)}</span>
+            <button class="mini-btn" data-edit-acct="${idx}">Edit</button>
+            <button class="mini-btn" data-remove-acct="${idx}">×</button>
+          </div>
+        </div>
+      </div>`;
+    });
     el.innerHTML = `
+      <div class="section"><span class="t-section">Accounts &amp; net position</span></div>
+      <div class="card">
+        <div class="card-row">
+          <div><div class="t-micro" style="text-transform:uppercase;">net position</div>
+          <div class="t-stat" style="color:${np.net<0?'var(--clay)':'var(--sage)'}; margin-top:4px;">${np.net<0?'−':''}${fmt(Math.abs(np.net))}</div></div>
+          <div style="text-align:right"><div class="t-micro">assets ${fmt(np.assets)}</div><div class="t-micro">owed ${fmt(np.owed)}</div></div>
+        </div>
+        ${state.snapshots.length>1 ? `<div class="micro" style="margin-top:8px;">Tracked monthly: ${state.snapshots.slice(-6).map(s=>`${s.k.slice(5)}: ${s.net<0?'−':''}${fmt(Math.abs(s.net))}`).join(' · ')}</div>` : '<div class="micro" style="margin-top:8px;">A snapshot is saved each time you start a new month, building your trend over time.</div>'}
+      </div>
+      ${acctList}
+      <button class="plus" id="show-acct-form">+ add account</button>
+      <div class="form" id="acct-form">
+        <div class="field"><label>Name</label><input id="a-name" placeholder="e.g. Starling current"/></div>
+        <div class="row2">
+          <div class="field"><label>Type</label>
+            <select id="a-type"><option>current</option><option>savings</option><option>cash</option><option>other</option></select>
+          </div>
+          <div class="field"><label>Balance (£)</label><input id="a-balance" type="number" inputmode="decimal" placeholder="0"/></div>
+        </div>
+        <button class="btn" id="save-acct">Save account</button>
+        <button class="btn ghost" id="cancel-acct">Cancel</button>
+      </div>
+
+      <div class="section"><span class="t-section">Appearance</span></div>
+      <div class="card">
+        <div class="card-row">
+          <div><div style="font-size:15px; font-weight:600;">Theme</div>
+          <div class="meta">Dark is the default; light is easier in daylight.</div></div>
+          <span class="seg" style="width:132px;">
+            <button id="theme-dark" class="${state.settings.theme!=='light'?'active':''}">Dark</button>
+            <button id="theme-light" class="${state.settings.theme==='light'?'active':''}">Light</button>
+          </span>
+        </div>
+      </div>
+
       <div class="section"><span class="t-section">Backup &amp; data</span></div>
       <div class="card">
         <div class="t-help" style="margin-bottom:12px;">Everything lives on this device — nothing is sent anywhere. That's the privacy model, and it's also why backups matter: copy one out every so often.</div>
@@ -965,6 +1201,29 @@
         <div class="micro" style="margin-top:10px;">Assumptions the projections make: interest compounds monthly at the stated APR; minimum payments stay fixed; when a debt clears, its minimum rolls into the attack; 0% promos revert to their stated post-promo rate on the end date.</div>
       </div>
     `;
+    document.getElementById('show-acct-form').onclick = ()=> document.getElementById('acct-form').classList.add('open');
+    document.getElementById('cancel-acct').onclick = ()=> document.getElementById('acct-form').classList.remove('open');
+    document.getElementById('save-acct').onclick = ()=>{
+      const name = document.getElementById('a-name').value.trim();
+      const type = document.getElementById('a-type').value;
+      const balance = parseFloat(document.getElementById('a-balance').value)||0;
+      if (!name){ toast('Give the account a name'); return; }
+      state.accounts.push({ name, type, balance });
+      logActivity(`Added account: ${name}`);
+      save(); renderAll();
+    };
+    el.querySelectorAll('[data-edit-acct]').forEach(btn=>{
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.editAcct); const a=state.accounts[i];
+        const v = prompt(`Balance of "${a.name}" (£):`, a.balance);
+        const n = parseFloat(v);
+        if (!isNaN(n)){ a.balance=n; logActivity(`Updated ${a.name} balance to ${fmt2(n)}`); save(); renderAll(); } };
+    });
+    el.querySelectorAll('[data-remove-acct]').forEach(btn=>{
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.removeAcct);
+        if (confirm(`Remove the account "${state.accounts[i].name}"?`)){ state.accounts.splice(i,1); save(); renderAll(); } };
+    });
+    document.getElementById('theme-dark').onclick = ()=>{ state.settings.theme='dark'; applyTheme(); save(); renderMore(); };
+    document.getElementById('theme-light').onclick = ()=>{ state.settings.theme='light'; applyTheme(); save(); renderMore(); };
     wireBackup();
     document.getElementById('export-csv').onclick = ()=>{
       try {
@@ -974,6 +1233,8 @@
         state.categories.forEach(c=>{ csv += `category,"${c.name.replace(/"/g,'""')}",${c.allocated},${c.spent},,\n`; });
         state.bills.forEach(b=>{ csv += `bill,"${b.name.replace(/"/g,'""')}",${b.amount},${b.dueDay||''},,\n`; });
         state.goals.forEach(g=>{ csv += `goal,"${g.name.replace(/"/g,'""')}",${g.target},${g.saved},${g.monthly},\n`; });
+        state.accounts.forEach(a=>{ csv += `account,"${a.name.replace(/"/g,'""')}",${a.balance},${a.type||''},,\n`; });
+        state.snapshots.forEach(s=>{ csv += `snapshot,${s.k},${s.assets},${s.owed},${s.net},\n`; });
         const blob = new Blob([csv], {type:'text/csv'});
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
@@ -1061,6 +1322,7 @@
 
   function renderAll(){
     if (!loaded) return;
+    applyTheme();
     updateStorageBadge();
     renderHome();
     renderPlan();

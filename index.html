@@ -85,7 +85,7 @@
   .qa .micro { margin-top:2px; }
 
   .tabs { display:flex; position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; background:var(--panel); border-top:1px solid var(--line); z-index:20; padding-bottom:env(safe-area-inset-bottom); }
-  .tab { flex:1; text-align:center; padding:13px 0 11px; font-family:var(--mono); font-size:11.5px; letter-spacing:0.05em; color:var(--text-3); border-top:2px solid transparent; text-transform:uppercase; }
+  .tab { flex:1; text-align:center; padding:13px 0 11px; font-family:var(--mono); font-size:11.5px; letter-spacing:0.05em; color:var(--text-3); border:none; background:var(--panel); appearance:none; -webkit-appearance:none; border-top:2px solid transparent; text-transform:uppercase; border-radius:0; }
   .tab.active { color:var(--amber); border-top-color:var(--amber); }
 
   .form { background:var(--panel-hi); border:1px solid var(--line); border-radius:var(--r); padding:16px; margin-top:10px; display:none; }
@@ -134,8 +134,9 @@
   .celebrate { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(16,20,26,0.9); z-index:50; text-align:center; padding:30px; }
   .celebrate.show { display:flex; }
   .celebrate .t-hero { color:var(--amber); }
-  .toast { position:fixed; bottom:76px; left:50%; transform:translateX(-50%); background:var(--panel-hi); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:11px 18px; font-size:14px; z-index:40; display:none; max-width:90%; }
-  .toast.show { display:block; }
+  .toast { position:fixed; bottom:76px; left:50%; transform:translateX(-50%); background:var(--panel-hi); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:11px 18px; font-size:14px; z-index:40; display:none; max-width:90%; align-items:center; gap:14px; }
+  .toast.show { display:flex; }
+  .toast .undo-btn { background:transparent; border:none; color:var(--amber); font-family:var(--mono); font-size:13px; letter-spacing:0.05em; text-transform:uppercase; padding:6px 4px; min-height:0; }
   ::placeholder { color:#4d5666; }
   textarea { resize:vertical; }
 </style>
@@ -251,14 +252,32 @@
   const esc = s => String(s??'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const activeDebts = () => state.debts.filter(d => Number(d.balance) > 0);
   function logActivity(txt){
-    state.activity.unshift({ d:new Date().toISOString().slice(0,10), txt });
+    // skip if identical to the most recent entry from the same day (toggle spam)
+    const today = new Date().toISOString().slice(0,10);
+    if (state.activity[0] && state.activity[0].txt === txt && state.activity[0].d === today) return;
+    // collapse repeated "Set extra debt payment" tweaks from the same day into one
+    if (txt.startsWith('Set extra debt payment') && state.activity[0] && state.activity[0].txt.startsWith('Set extra debt payment') && state.activity[0].d === today){
+      state.activity[0].txt = txt;
+      return;
+    }
+    state.activity.unshift({ d:today, txt });
     if (state.activity.length > 100) state.activity.length = 100;
   }
   let toastTimer=null;
-  function toast(msg){
+  function toast(msg, undoFn){
     const t=document.getElementById('toast');
-    t.textContent=msg; t.classList.add('show');
-    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), 2600);
+    t.innerHTML = '';
+    const span=document.createElement('span'); span.textContent=msg; t.appendChild(span);
+    if (undoFn){
+      const b=document.createElement('button'); b.className='undo-btn'; b.textContent='Undo';
+      b.onclick = ()=>{ undoFn(); save(); renderAll(); toast('Undone'); };
+      t.appendChild(b);
+    }
+    t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), undoFn ? 7000 : 2600);
+  }
+  function dropActivityHead(txt){
+    if (state.activity[0] && state.activity[0].txt === txt) state.activity.shift();
   }
 
   // ---------- simulation (rate-aware, lump-sum aware) ----------
@@ -465,13 +484,25 @@
     const amt = prompt('Payment toward "'+d.name+'" (£):', d.minPayment || '');
     const val = parseFloat(amt);
     if (isNaN(val) || val<=0) return;
+    const prevBalance = Number(d.balance);
+    const activityTxt = `Paid ${fmt2(val)} toward ${d.name}`;
     d.payments = d.payments||[];
     d.payments.push({ d:new Date().toISOString().slice(0,10), amt:val });
-    d.balance = Math.max(0, Number(d.balance)-val);
-    logActivity(`Paid ${fmt2(val)} toward ${d.name}`);
+    d.balance = Math.max(0, prevBalance - val);
+    logActivity(activityTxt);
+    const cleared = d.balance <= 0;
+    const clearedTxt = `${d.name} fully cleared 🎉`;
+    if (cleared){ logActivity(clearedTxt); }
     save(); renderAll();
-    if (d.balance<=0){ logActivity(`${d.name} fully cleared 🎉`); save(); celebrate(d.name); }
-    else toast(`${fmt2(val)} logged — ${d.name} now ${fmt2(d.balance)}`);
+    const undoFn = ()=>{
+      d.balance = prevBalance;
+      d.payments.pop();
+      if (cleared) dropActivityHead(clearedTxt);
+      dropActivityHead(activityTxt);
+      document.getElementById('celebrate').classList.remove('show');
+    };
+    if (cleared){ celebrate(d.name); toast(`${d.name} cleared`, undoFn); }
+    else toast(`${fmt2(val)} logged — ${d.name} now ${fmt2(d.balance)}`, undoFn);
   }
 
   // ================= ONBOARDING =================
@@ -735,15 +766,15 @@
         })()}
       </div>` : ''}
     `;
-    document.getElementById('strat-aval').onclick = ()=>{ state.strategy='avalanche'; logActivity('Switched strategy to avalanche'); save(); renderAll(); };
-    document.getElementById('strat-snow').onclick = ()=>{ state.strategy='snowball'; logActivity('Switched strategy to snowball'); save(); renderAll(); };
+    document.getElementById('strat-aval').onclick = ()=>{ state.strategy='avalanche'; save(); renderAll(); };
+    document.getElementById('strat-snow').onclick = ()=>{ state.strategy='snowball'; save(); renderAll(); };
     document.getElementById('strat-cust').onclick = ()=>{
       // seed custom order from current sorted order so it starts sensible
       const now2 = new Date();
       const sorted = [...activeDebts()].sort(debtSorter(state.strategy==='custom'?'avalanche':state.strategy, now2));
       sorted.forEach((d,i)=> d.ord = i);
       state.debts.filter(d=>Number(d.balance)<=0).forEach((d,i)=> d.ord = sorted.length+i);
-      state.strategy='custom'; logActivity('Switched to custom debt order'); save(); renderAll();
+      state.strategy='custom'; save(); renderAll();
     };
     document.getElementById('extra-input').onchange = e=>{ state.extraPayment = Math.max(0, parseFloat(e.target.value)||0); logActivity(`Set extra debt payment to ${fmt(state.extraPayment)}/mo`); save(); renderAll(); };
     document.getElementById('lump-input').onchange = e=>{ state.lumpSum = Math.max(0, parseFloat(e.target.value)||0); save(); renderPlan(); };
@@ -1079,12 +1110,18 @@
         const val = parseFloat(amt);
         if (!isNaN(val) && val>0){
           const c = state.categories[i];
-          c.spent = Number(c.spent||0)+val;
+          const prevSpent = Number(c.spent||0);
+          const activityTxt = `Spent ${fmt2(val)} on ${c.name}`;
+          c.spent = prevSpent + val;
           c.entries = c.entries||[];
           c.entries.push({ d:new Date().toISOString().slice(0,10), amt:val });
-          logActivity(`Spent ${fmt2(val)} on ${c.name}`);
+          logActivity(activityTxt);
           save(); renderAll();
-          toast(`${fmt2(val)} logged against ${c.name}`);
+          toast(`${fmt2(val)} logged against ${c.name}`, ()=>{
+            c.spent = prevSpent;
+            c.entries.pop();
+            dropActivityHead(activityTxt);
+          });
         } };
     });
 
@@ -1106,10 +1143,17 @@
         const amt = prompt(`Add to "${state.goals[i].name}" (£):`, state.goals[i].monthly||'');
         const val = parseFloat(amt);
         if (!isNaN(val) && val>0){
-          state.goals[i].saved = Number(state.goals[i].saved||0)+val;
-          logActivity(`Saved ${fmt2(val)} into ${state.goals[i].name}`);
+          const g = state.goals[i];
+          const prevSaved = Number(g.saved||0);
+          const activityTxt = `Saved ${fmt2(val)} into ${g.name}`;
+          g.saved = prevSaved + val;
+          logActivity(activityTxt);
           save(); renderAll();
-          if (state.goals[i].saved >= state.goals[i].target) toast(`${state.goals[i].name} — target hit 🎉`);
+          const hit = g.saved >= g.target;
+          toast(hit ? `${g.name} — target hit 🎉` : `${fmt2(val)} into ${g.name}`, ()=>{
+            g.saved = prevSaved;
+            dropActivityHead(activityTxt);
+          });
         } };
     });
     el.querySelectorAll('[data-remove-goal]').forEach(btn=>{

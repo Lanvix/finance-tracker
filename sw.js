@@ -1,6 +1,6 @@
 // Runway finance tracker — service worker
 // Bump this version string whenever you update index.html so installed apps pick up the change.
-const CACHE = 'runway-v2';
+const CACHE = 'runway-v3';
 
 const ASSETS = [
   './',

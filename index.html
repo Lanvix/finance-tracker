@@ -11,155 +11,174 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
   :root{
-    --bg: #10141a; --panel: #171d26; --panel-hi: #1e2632; --line: #2a3341;
-    --text: #e8e6e0; --text-dim: #8b93a0;
-    --amber: #d9a054; --amber-dim: #6b5535;
-    --sage: #8fb996; --sage-dim: #3f5844;
-    --clay: #c1666b; --clay-dim: #5c3235;
-    --mono: 'IBM Plex Mono', 'SF Mono', Consolas, monospace;
-    --sans: 'Space Grotesk', 'Segoe UI', sans-serif;
+    --bg:#10141a; --panel:#181f29; --panel-hi:#202938; --line:#2c3646;
+    --text:#eceae4; --text-2:#a8b0bd; --text-3:#7d8695;
+    --amber:#dca75e; --amber-dim:#4d3d22;
+    --sage:#94c09b; --sage-dim:#2d4432;
+    --clay:#cd7377; --clay-dim:#4a2b2e;
+    --mono:'IBM Plex Mono','SF Mono',Consolas,monospace;
+    --sans:'Space Grotesk','Segoe UI',sans-serif;
+    --r:10px; --sp:16px;
   }
-  * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); }
-  #app-root {
-    background: var(--bg); color: var(--text); font-family: var(--sans);
-    min-height: 100vh; max-width: 480px; margin: 0 auto; padding-bottom: 84px; position: relative;
-  }
-  .header { padding: 20px 18px 14px; border-bottom: 1px solid var(--line); }
-  .eyebrow { font-family: var(--mono); font-size: 11px; letter-spacing: 0.12em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 4px; }
-  .h1 { font-size: 22px; font-weight: 600; margin: 0 0 14px 0; letter-spacing: -0.01em; }
-  .runway { font-family: var(--mono); font-size: 13px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; }
-  .runway-top { display:flex; justify-content: space-between; color: var(--text-dim); margin-bottom: 8px; font-size: 11px; letter-spacing: 0.06em;}
-  .runway-bar { font-size: 15px; letter-spacing: -1px; white-space: nowrap; overflow: hidden; color: var(--amber); }
-  .runway-stats { display:flex; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text-dim); }
-  .runway-stats b { color: var(--text); font-weight: 500; }
-  .runway-date { text-align:center; margin-top: 8px; font-size: 12px; color: var(--sage); }
+  * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+  body { margin:0; background:var(--bg); }
+  #app-root { background:var(--bg); color:var(--text); font-family:var(--sans); min-height:100vh; max-width:480px; margin:0 auto; padding-bottom:92px; font-size:15px; line-height:1.5; }
 
-  .tabs { display: flex; position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 480px; background: var(--panel); border-top: 1px solid var(--line); z-index: 20; }
-  .tab { flex: 1; text-align: center; padding: 12px 0 10px; font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; color: var(--text-dim); cursor: pointer; border-top: 2px solid transparent; text-transform: uppercase; }
-  .tab.active { color: var(--amber); border-top: 2px solid var(--amber); }
-  .tab:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--amber); outline-offset: 1px; }
+  /* ---- type scale ---- */
+  .t-page { font-size:23px; font-weight:600; letter-spacing:-0.01em; }
+  .t-section { font-family:var(--mono); font-size:12px; letter-spacing:0.1em; color:var(--text-3); text-transform:uppercase; }
+  .t-card { font-size:16px; font-weight:600; }
+  .t-stat { font-family:var(--mono); font-size:21px; font-weight:500; }
+  .t-hero { font-family:var(--mono); font-size:30px; font-weight:500; letter-spacing:-0.02em; }
+  .t-body { font-size:14.5px; color:var(--text-2); }
+  .t-help { font-size:13px; color:var(--text-2); }
+  .t-micro { font-family:var(--mono); font-size:12px; color:var(--text-3); }
 
-  .view { padding: 16px 18px 8px; }
-  .section-label { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; color: var(--text-dim); text-transform: uppercase; margin: 18px 0 8px; display: flex; justify-content: space-between; align-items: center; }
-  .section-label:first-child { margin-top: 0; }
+  .header { padding:20px var(--sp) 12px; display:flex; justify-content:space-between; align-items:center; }
+  .view { padding:4px var(--sp) 12px; }
+  .section { margin:22px 0 10px; display:flex; justify-content:space-between; align-items:center; }
+  .section:first-child { margin-top:8px; }
 
-  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 13px 14px; margin-bottom: 10px; }
-  .card.cleared { opacity: 0.55; }
-  .card-row { display: flex; justify-content: space-between; align-items: baseline; }
-  .card-name { font-weight: 500; font-size: 14.5px; }
-  .card-meta { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 3px; }
-  .card-amount { font-family: var(--mono); font-size: 15px; font-weight: 500; }
-  .badge { font-family: var(--mono); font-size: 10px; letter-spacing: 0.05em; padding: 2px 6px; border-radius: 4px; text-transform: uppercase; }
-  .badge.priority { background: var(--amber-dim); color: var(--amber); }
-  .badge.ok { background: var(--sage-dim); color: var(--sage); }
-  .badge.over { background: var(--clay-dim); color: var(--clay); }
-  .badge.done { background: var(--sage-dim); color: var(--sage); }
+  .card { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:16px; margin-bottom:12px; }
+  .card.hi { background:var(--panel-hi); }
+  .card.cleared { opacity:0.55; }
+  .card-row { display:flex; justify-content:space-between; align-items:baseline; gap:10px; }
+  .meta { font-size:13px; color:var(--text-2); margin-top:4px; }
+  .micro { font-family:var(--mono); font-size:12px; color:var(--text-3); margin-top:4px; }
 
-  .bar-track { height: 5px; background: var(--line); border-radius: 3px; margin-top: 8px; overflow: hidden; }
-  .bar-fill { height: 100%; border-radius: 3px; transition: width 0.4s ease; }
-  @media (prefers-reduced-motion: reduce){ .bar-fill{ transition:none; } }
+  .badge { font-family:var(--mono); font-size:11px; letter-spacing:0.04em; padding:3px 8px; border-radius:5px; text-transform:uppercase; white-space:nowrap; }
+  .badge.priority { background:var(--amber-dim); color:var(--amber); }
+  .badge.ok { background:var(--sage-dim); color:var(--sage); }
+  .badge.warn { background:var(--clay-dim); color:var(--clay); }
 
-  .mini-btn { background: transparent; border: 1px solid var(--line); color: var(--text-dim); font-family: var(--mono); font-size: 11px; padding: 4px 9px; border-radius: 5px; cursor: pointer; }
-  .mini-btn:hover { border-color: var(--amber); color: var(--amber); }
-  .mini-btn.accent { border-color: var(--amber-dim); color: var(--amber); }
+  .bar-track { height:6px; background:var(--line); border-radius:3px; margin-top:10px; overflow:hidden; position:relative; }
+  .bar-fill { height:100%; border-radius:3px; transition:width 0.4s ease; }
+  .bar-pace { position:absolute; top:-2px; bottom:-2px; width:2px; background:var(--text-3); }
+  @media (prefers-reduced-motion:reduce){ .bar-fill{transition:none;} }
 
-  .add-form { background: var(--panel-hi); border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-top: 8px; display: none; }
-  .add-form.open { display: block; }
-  .field { margin-bottom: 10px; }
-  .field label { display:block; font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); letter-spacing: 0.05em; text-transform: uppercase; margin-bottom: 4px; }
-  .field input, .field select { width: 100%; background: var(--bg); border: 1px solid var(--line); color: var(--text); padding: 9px 10px; border-radius: 6px; font-family: var(--sans); font-size: 14px; }
-  .row2 { display: flex; gap: 8px; }
-  .row2 .field { flex: 1; }
+  button { font-family:var(--sans); cursor:pointer; }
+  .btn { width:100%; background:var(--amber); color:#10141a; border:none; padding:13px 0; border-radius:8px; font-weight:600; font-size:15px; min-height:46px; }
+  .btn:active { opacity:0.85; }
+  .btn.ghost { background:transparent; border:1px solid var(--line); color:var(--text-2); margin-top:8px; }
+  .btn.sm { width:auto; padding:10px 16px; font-size:14px; min-height:42px; }
+  .mini-btn { background:transparent; border:1px solid var(--line); color:var(--text-2); font-family:var(--mono); font-size:12.5px; padding:9px 13px; border-radius:7px; min-height:38px; }
+  .mini-btn:active, .mini-btn:hover { border-color:var(--amber); color:var(--amber); }
+  .mini-btn.accent { border-color:var(--amber-dim); color:var(--amber); }
+  button:focus-visible, input:focus-visible, .tab:focus-visible { outline:2px solid var(--amber); outline-offset:2px; }
 
-  .btn { width: 100%; background: var(--amber); color: #10141a; border: none; padding: 10px 0; border-radius: 6px; font-weight: 600; font-size: 13.5px; cursor: pointer; font-family: var(--sans); }
-  .btn.ghost { background: transparent; border: 1px solid var(--line); color: var(--text-dim); margin-top: 6px; }
+  .quick-actions { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .qa { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:14px 12px; color:var(--text); font-size:14px; text-align:left; min-height:48px; }
+  .qa:active { background:var(--panel-hi); }
+  .qa .micro { margin-top:2px; }
 
-  .empty-state { font-family: var(--mono); font-size: 12px; color: var(--text-dim); padding: 20px 0; text-align: center; border: 1px dashed var(--line); border-radius: 8px; }
-  .plus { background: var(--panel); border: 1px solid var(--line); color: var(--amber); width: 100%; padding: 9px 0; border-radius: 8px; font-family: var(--mono); font-size: 12px; cursor: pointer; letter-spacing: 0.04em; margin-top: 4px; }
+  .tabs { display:flex; position:fixed; bottom:0; left:50%; transform:translateX(-50%); width:100%; max-width:480px; background:var(--panel); border-top:1px solid var(--line); z-index:20; padding-bottom:env(safe-area-inset-bottom); }
+  .tab { flex:1; text-align:center; padding:13px 0 11px; font-family:var(--mono); font-size:11.5px; letter-spacing:0.05em; color:var(--text-3); border-top:2px solid transparent; text-transform:uppercase; }
+  .tab.active { color:var(--amber); border-top-color:var(--amber); }
 
-  .overview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-  .stat { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 13px; }
-  .stat-label { font-family: var(--mono); font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
-  .stat-value { font-family: var(--mono); font-size: 18px; margin-top: 5px; }
+  .form { background:var(--panel-hi); border:1px solid var(--line); border-radius:var(--r); padding:16px; margin-top:10px; display:none; }
+  .form.open { display:block; }
+  .field { margin-bottom:12px; }
+  .field label { display:block; font-family:var(--mono); font-size:11.5px; color:var(--text-3); letter-spacing:0.05em; text-transform:uppercase; margin-bottom:6px; }
+  .field input, .field select { width:100%; background:var(--bg); border:1px solid var(--line); color:var(--text); padding:12px; border-radius:8px; font-family:var(--sans); font-size:15px; min-height:46px; }
+  .row2 { display:flex; gap:10px; }
+  .row2 .field, .row2 > * { flex:1; }
+  .row2 .mini-btn { flex:1; }
 
-  .strategy-toggle { display: flex; border: 1px solid var(--line); border-radius: 7px; overflow: hidden; margin-bottom: 10px; }
-  .strategy-toggle button { flex: 1; background: transparent; border: none; color: var(--text-dim); font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em; padding: 9px 0; cursor: pointer; text-transform: uppercase; }
-  .strategy-toggle button.active { background: var(--amber-dim); color: var(--amber); }
+  .empty { font-size:13.5px; color:var(--text-3); padding:24px 12px; text-align:center; border:1px dashed var(--line); border-radius:var(--r); line-height:1.6; }
+  .plus { background:var(--panel); border:1px solid var(--line); color:var(--amber); width:100%; padding:12px 0; border-radius:var(--r); font-family:var(--mono); font-size:13px; letter-spacing:0.04em; margin-top:4px; min-height:44px; }
 
-  .proj-hero { text-align: center; padding: 6px 0 10px; }
-  .proj-date { font-family: var(--mono); font-size: 26px; color: var(--sage); letter-spacing: -0.02em; }
-  .proj-sub { font-family: var(--mono); font-size: 11px; color: var(--text-dim); margin-top: 4px; }
-  .proj-compare { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-top: 10px; }
-  .proj-cell { background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 8px 10px; font-family: var(--mono); font-size: 11px; color: var(--text-dim); }
-  .proj-cell b { display: block; color: var(--text); font-size: 13px; margin-top: 2px; font-weight: 500; }
-  .chart-wrap { margin-top: 12px; }
-  .chart-wrap svg { width: 100%; height: 90px; display: block; }
+  .grid2 { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+  .stat { background:var(--panel); border:1px solid var(--line); border-radius:var(--r); padding:14px; }
+  .stat .t-micro { text-transform:uppercase; letter-spacing:0.06em; }
+  .stat .t-stat { margin-top:6px; }
 
-  .milestones { display: flex; justify-content: space-between; margin-top: 10px; font-family: var(--mono); font-size: 10px; }
-  .milestone { color: var(--line); text-align: center; flex: 1; }
-  .milestone.hit { color: var(--sage); }
+  .alert { display:flex; gap:10px; align-items:flex-start; background:var(--panel); border:1px solid var(--line); border-left:3px solid var(--clay); border-radius:var(--r); padding:13px 14px; margin-bottom:10px; }
+  .alert.info { border-left-color:var(--amber); }
+  .alert .t-help { margin-top:2px; }
 
-  .celebrate { position: fixed; inset: 0; display: none; align-items: center; justify-content: center; background: rgba(16,20,26,0.88); z-index: 50; text-align: center; padding: 30px; }
-  .celebrate.show { display: flex; }
-  .celebrate-inner { font-family: var(--mono); }
-  .celebrate-big { font-size: 42px; }
-  .celebrate-title { font-size: 19px; color: var(--sage); margin-top: 14px; font-family: var(--sans); font-weight: 600; }
-  .celebrate-sub { font-size: 12px; color: var(--text-dim); margin-top: 8px; line-height: 1.6; }
+  .strategy-toggle { display:flex; border:1px solid var(--line); border-radius:8px; overflow:hidden; margin-bottom:12px; }
+  .strategy-toggle button { flex:1; background:transparent; border:none; color:var(--text-2); font-family:var(--mono); font-size:12px; letter-spacing:0.04em; padding:12px 0; text-transform:uppercase; min-height:44px; }
+  .strategy-toggle button.active { background:var(--amber-dim); color:var(--amber); }
 
-  .save-note { font-family: var(--mono); font-size: 10.5px; color: var(--text-dim); text-align:center; margin-top: 14px; opacity: 0.7; }
-  ::placeholder { color: #4a5364; }
-  textarea { resize: vertical; }
+  .hero-num { font-family:var(--mono); font-size:30px; color:var(--sage); letter-spacing:-0.02em; }
+  .chart-wrap svg { width:100%; height:100px; display:block; margin-top:10px; }
+  .scen-table { width:100%; border-collapse:collapse; font-family:var(--mono); font-size:12.5px; margin-top:8px; }
+  .scen-table td, .scen-table th { padding:9px 6px; border-bottom:1px solid var(--line); text-align:right; color:var(--text-2); }
+  .scen-table th { color:var(--text-3); font-weight:400; text-transform:uppercase; font-size:11px; letter-spacing:0.05em; }
+  .scen-table td:first-child, .scen-table th:first-child { text-align:left; color:var(--text); }
+
+  details.debt-detail { margin-top:10px; }
+  details.debt-detail summary { font-family:var(--mono); font-size:12.5px; color:var(--text-3); cursor:pointer; list-style:none; min-height:38px; display:flex; align-items:center; }
+  details.debt-detail summary::before { content:'▸ '; margin-right:4px; }
+  details[open].debt-detail summary::before { content:'▾ '; }
+  .pay-history { font-family:var(--mono); font-size:12px; color:var(--text-2); margin-top:8px; }
+  .pay-history div { padding:5px 0; border-bottom:1px solid var(--line); display:flex; justify-content:space-between; }
+
+  .activity-item { display:flex; justify-content:space-between; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); font-size:13.5px; color:var(--text-2); }
+  .activity-item:last-child { border-bottom:none; }
+  .activity-item .t-micro { flex-shrink:0; }
+
+  .celebrate { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:rgba(16,20,26,0.9); z-index:50; text-align:center; padding:30px; }
+  .celebrate.show { display:flex; }
+  .celebrate .t-hero { color:var(--amber); }
+  .toast { position:fixed; bottom:76px; left:50%; transform:translateX(-50%); background:var(--panel-hi); border:1px solid var(--line); color:var(--text); border-radius:8px; padding:11px 18px; font-size:14px; z-index:40; display:none; max-width:90%; }
+  .toast.show { display:block; }
+  ::placeholder { color:#4d5666; }
+  textarea { resize:vertical; }
 </style>
 
 <div id="app-root">
   <div class="header">
-    <div class="eyebrow">// finances</div>
-    <div class="h1">Runway <span id="storage-badge" class="badge over" style="display:none; vertical-align:middle; font-weight:400;"></span></div>
-    <div class="runway">
-      <div class="runway-top"><span>DEBT CLEARED</span><span id="runway-pct">0%</span></div>
-      <div class="runway-bar" id="runway-bar">[--------------------]</div>
-      <div class="runway-stats">
-        <span>Owed: <b id="runway-owed">£0</b></span>
-        <span>Cleared: <b id="runway-cleared">£0</b></span>
-      </div>
-      <div class="runway-date" id="runway-date" style="display:none"></div>
+    <div>
+      <div class="t-micro" style="text-transform:uppercase; letter-spacing:0.12em;">// finances</div>
+      <div class="t-page">Runway <span id="storage-badge" class="badge warn" style="display:none; vertical-align:middle; font-weight:400;"></span></div>
     </div>
   </div>
 
-  <div class="tabs">
-    <div class="tab active" data-view="overview">Overview</div>
-    <div class="tab" data-view="debts">Debts</div>
-    <div class="tab" data-view="budget">Budget</div>
+  <div class="tabs" role="tablist">
+    <button class="tab active" data-view="home" role="tab">Home</button>
+    <button class="tab" data-view="plan" role="tab">Plan</button>
+    <button class="tab" data-view="debts" role="tab">Debts</button>
+    <button class="tab" data-view="budget" role="tab">Budget</button>
+    <button class="tab" data-view="more" role="tab">More</button>
   </div>
 
-  <div class="view" id="view-overview"></div>
+  <div class="view" id="view-home"></div>
+  <div class="view" id="view-plan" style="display:none"></div>
   <div class="view" id="view-debts" style="display:none"></div>
   <div class="view" id="view-budget" style="display:none"></div>
+  <div class="view" id="view-more" style="display:none"></div>
 
-  <div class="celebrate" id="celebrate" role="dialog">
-    <div class="celebrate-inner">
-      <div class="celebrate-big">[█████]</div>
-      <div class="celebrate-title" id="celebrate-title">Debt cleared</div>
-      <div class="celebrate-sub" id="celebrate-sub"></div>
-      <button class="btn" style="margin-top:18px; padding:10px 30px; width:auto" id="celebrate-close">Keep going</button>
+  <div class="celebrate" id="celebrate" role="dialog" aria-modal="true">
+    <div>
+      <div class="t-hero">[█████]</div>
+      <div class="t-card" style="color:var(--sage); margin-top:16px; font-size:19px;" id="celebrate-title">Debt cleared</div>
+      <div class="t-help" id="celebrate-sub" style="margin-top:10px; line-height:1.6;"></div>
+      <button class="btn sm" style="margin-top:20px;" id="celebrate-close">Keep going</button>
     </div>
   </div>
+  <div class="toast" id="toast" role="status"></div>
 </div>
 
 <script>
 (function(){
   const STORE_KEY = 'finance-tracker-state-v1';
-  let state = { debts: [], budgetIncome: 0, categories: [], strategy: 'avalanche', extraPayment: 0 };
-  let loaded = false, storageOk = null, warnedOnce = false;
-  let editingIndex = null;
+  let state = defaults();
+  let loaded=false, storageOk=null, warnedOnce=false, editingIndex=null, currentView='home';
 
+  function defaults(){
+    return { debts:[], categories:[], bills:[], goals:[], activity:[],
+      budgetIncome:0, strategy:'avalanche', extraPayment:0, lumpSum:0,
+      monthKey: monthKeyNow() };
+  }
+  function monthKeyNow(){ const d=new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0'); }
   function migrate(s){
-    s.debts = (s.debts||[]).map(d => ({ payments: [], promoEnd: null, postPromoApr: null, ...d }));
-    s.categories = s.categories||[];
-    s.strategy = s.strategy || 'avalanche';
-    s.extraPayment = Number(s.extraPayment)||0;
-    s.budgetIncome = Number(s.budgetIncome)||0;
+    const base = defaults();
+    s = { ...base, ...s };
+    s.debts = (s.debts||[]).map(d => ({ payments:[], promoEnd:null, postPromoApr:null, dueDay:null, ...d }));
+    s.bills = (s.bills||[]).map(b => ({ paid:false, ...b }));
+    s.goals = s.goals||[];
+    s.activity = s.activity||[];
     return s;
   }
 
@@ -167,12 +186,12 @@
     try {
       if (window.storage && window.storage.get){
         const res = await window.storage.get(STORE_KEY, false);
-        if (res && res.value) { state = migrate(JSON.parse(res.value)); storageOk = true; }
+        if (res && res.value){ state = migrate(JSON.parse(res.value)); storageOk = true; }
       } else {
         const raw = localStorage.getItem(STORE_KEY);
-        if (raw) { state = migrate(JSON.parse(raw)); storageOk = true; }
+        if (raw){ state = migrate(JSON.parse(raw)); storageOk = true; }
       }
-    } catch(e) { /* fresh start */ }
+    } catch(e){}
     loaded = true;
     renderAll();
   }
@@ -187,363 +206,478 @@
         localStorage.setItem(STORE_KEY, payload);
         storageOk = localStorage.getItem(STORE_KEY) === payload;
       }
-    } catch(e) {
+    } catch(e){
       storageOk = false;
-      if (!warnedOnce) { console.warn('Auto-save unavailable — use Backup on Overview.'); warnedOnce = true; }
+      if (!warnedOnce){ console.warn('Auto-save unavailable — use Backup in More.'); warnedOnce = true; }
     }
     updateStorageBadge();
   }
   function updateStorageBadge(){
     const el = document.getElementById('storage-badge');
     if (!el) return;
-    if (storageOk === false){ el.style.display = 'inline-block'; el.textContent = 'auto-save off — use backup'; }
-    else { el.style.display = 'none'; }
+    if (storageOk === false){ el.style.display='inline-block'; el.textContent='auto-save off — back up in More'; }
+    else el.style.display='none';
   }
 
-  const fmt = n => '£' + Number(n||0).toLocaleString('en-GB', {maximumFractionDigits:0});
-  const fmt2 = n => '£' + Number(n||0).toLocaleString('en-GB', {minimumFractionDigits:2, maximumFractionDigits:2});
-  const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-  const monthLabel = (offset) => { const d = new Date(); d.setMonth(d.getMonth()+offset); return MONTHS[d.getMonth()] + ' ' + d.getFullYear(); };
-  const escapeHtml = s => String(s).replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
+  // ---------- helpers ----------
+  const fmt = n => '£' + Number(n||0).toLocaleString('en-GB',{maximumFractionDigits:0});
+  const fmt2 = n => '£' + Number(n||0).toLocaleString('en-GB',{minimumFractionDigits:2, maximumFractionDigits:2});
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  const monthLabel = off => { const d=new Date(); d.setMonth(d.getMonth()+off); return MONTHS[d.getMonth()]+' '+d.getFullYear(); };
+  const esc = s => String(s??'').replace(/[&<>"']/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]));
   const activeDebts = () => state.debts.filter(d => Number(d.balance) > 0);
+  function logActivity(txt){
+    state.activity.unshift({ d:new Date().toISOString().slice(0,10), txt });
+    if (state.activity.length > 100) state.activity.length = 100;
+  }
+  let toastTimer=null;
+  function toast(msg){
+    const t=document.getElementById('toast');
+    t.textContent=msg; t.classList.add('show');
+    clearTimeout(toastTimer); toastTimer=setTimeout(()=>t.classList.remove('show'), 2600);
+  }
 
-  // ---------- PAYOFF SIMULATION ----------
-  // Rate-aware: 0% promos flip to their post-promo APR when the promo end date passes.
+  // ---------- simulation (rate-aware, lump-sum aware) ----------
   function effApr(d, when){
     if (d.promoEnd && when < new Date(d.promoEnd)) return Number(d.apr)||0;
-    if (d.promoEnd) return (d.postPromoApr != null && d.postPromoApr !== '') ? Number(d.postPromoApr) : Number(d.apr)||0;
+    if (d.promoEnd) return (d.postPromoApr!=null && d.postPromoApr!=='') ? Number(d.postPromoApr) : Number(d.apr)||0;
     return Number(d.apr)||0;
   }
-  function simulate(strategy, extra){
+  function simulate(strategy, extra, lump){
     const src = activeDebts();
     if (!src.length) return null;
-    const ds = src.map(d => ({ ...d, bal: Number(d.balance) }));
+    const ds = src.map(d => ({...d, bal:Number(d.balance)}));
+    const now = new Date();
+    // apply lump sum now to strategy target
+    if (lump > 0){
+      const order = [...ds].sort(strategy==='avalanche' ? (a,b)=>effApr(b,now)-effApr(a,now)||a.bal-b.bal : (a,b)=>a.bal-b.bal);
+      let rem = lump;
+      for (const d of order){ if (rem<=0) break; const p=Math.min(rem,d.bal); d.bal-=p; rem-=p; }
+    }
     const totalBudget = src.reduce((s,d)=>s+Number(d.minPayment||0),0) + extra;
     const start = new Date(); start.setDate(1);
-    let month = 0, totalInterest = 0;
-    const series = [ds.reduce((s,d)=>s+d.bal,0)];
-    const payoffs = {};
-    while (ds.some(d=>d.bal>0.005) && month < 600){
+    let month=0, totalInterest=0;
+    const series=[ds.reduce((s,d)=>s+d.bal,0)], payoffs={};
+    while (ds.some(d=>d.bal>0.005) && month<600){
       month++;
       const cur = new Date(start.getFullYear(), start.getMonth()+month, 1);
-      ds.forEach(d => {
-        if (d.bal<=0) return;
-        const i = d.bal * (effApr(d, cur)/100/12);
-        d.bal += i; totalInterest += i;
-      });
+      ds.forEach(d=>{ if(d.bal<=0)return; const i=d.bal*(effApr(d,cur)/100/12); d.bal+=i; totalInterest+=i; });
       let remaining = totalBudget;
-      ds.forEach(d => { if (d.bal>0){ const p = Math.min(Number(d.minPayment||0), d.bal); d.bal -= p; remaining -= p; } });
-      const order = ds.filter(d=>d.bal>0).sort(strategy==='avalanche'
-        ? (a,b)=> effApr(b,cur)-effApr(a,cur) || a.bal-b.bal
-        : (a,b)=> a.bal-b.bal);
-      for (const d of order){
-        if (remaining <= 0) break;
-        const p = Math.min(remaining, d.bal);
-        d.bal -= p; remaining -= p;
-      }
-      ds.forEach(d => { if (d.bal <= 0.005 && payoffs[d.name] === undefined){ payoffs[d.name] = month; d.bal = 0; } });
+      ds.forEach(d=>{ if(d.bal>0){ const p=Math.min(Number(d.minPayment||0),d.bal); d.bal-=p; remaining-=p; } });
+      const order = ds.filter(d=>d.bal>0).sort(strategy==='avalanche' ? (a,b)=>effApr(b,cur)-effApr(a,cur)||a.bal-b.bal : (a,b)=>a.bal-b.bal);
+      for (const d of order){ if(remaining<=0)break; const p=Math.min(remaining,d.bal); d.bal-=p; remaining-=p; }
+      ds.forEach(d=>{ if(d.bal<=0.005 && payoffs[d.name]===undefined){ payoffs[d.name]=month; d.bal=0; } });
       series.push(ds.reduce((s,d)=>s+d.bal,0));
     }
-    return { months: month, totalInterest, series, payoffs, finished: !ds.some(d=>d.bal>0.005) };
+    return { months:month, totalInterest, series, payoffs, finished:!ds.some(d=>d.bal>0.005) };
+  }
+  function sparkline(seriesList){
+    // seriesList: [{series, color}]
+    const valid = seriesList.filter(s=>s.series && s.series.length>1);
+    if (!valid.length) return '';
+    const w=400,h=100,pad=4;
+    const max = Math.max(...valid.map(s=>Math.max(...s.series)));
+    const lines = valid.map(s=>{
+      const n=s.series.length, step=Math.max(1,Math.floor(n/120));
+      let pts=[];
+      for(let i=0;i<n;i+=step){
+        const x=pad+(i/(n-1))*(w-pad*2), y=h-pad-(s.series[i]/max)*(h-pad*2);
+        pts.push(x.toFixed(1)+','+y.toFixed(1));
+      }
+      const last=s.series[n-1];
+      pts.push((w-pad).toFixed(1)+','+(h-pad-(last/max)*(h-pad*2)).toFixed(1));
+      return `<polyline points="${pts.join(' ')}" fill="none" stroke="${s.color}" stroke-width="2" stroke-dasharray="${s.dash||'none'}"/>`;
+    }).join('');
+    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" role="img" aria-label="Projected balances over time">
+      ${lines}<line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="#2c3646" stroke-width="1"/></svg>`;
   }
 
-  function sparkline(series){
-    if (!series || series.length < 2) return '';
-    const w = 400, h = 90, pad = 4;
-    const max = Math.max(...series), n = series.length;
-    const step = Math.max(1, Math.floor(n / 120));
-    let pts = [];
-    for (let i = 0; i < n; i += step){
-      const x = pad + (i/(n-1)) * (w - pad*2);
-      const y = h - pad - (series[i]/max) * (h - pad*2);
-      pts.push(x.toFixed(1) + ',' + y.toFixed(1));
+  // ---------- money maths ----------
+  function money(){
+    const income = Number(state.budgetIncome)||0;
+    const billsTotal = state.bills.reduce((s,b)=>s+Number(b.amount||0),0);
+    const minTotal = activeDebts().reduce((s,d)=>s+Number(d.minPayment||0),0);
+    const goalsTotal = state.goals.reduce((s,g)=>s+Number(g.monthly||0),0);
+    const extra = Number(state.extraPayment)||0;
+    const freeCash = income - billsTotal - minTotal - extra - goalsTotal;
+    return { income, billsTotal, minTotal, goalsTotal, extra, freeCash };
+  }
+
+  // ---------- recommendations & alerts (rule-based, explainable) ----------
+  function buildAlerts(){
+    const alerts=[];
+    const now = new Date();
+    const sim = simulate(state.strategy, state.extraPayment, 0);
+    activeDebts().forEach(d=>{
+      if (d.promoEnd){
+        const end = new Date(d.promoEnd);
+        const days = Math.ceil((end-now)/86400000);
+        const projM = sim && sim.payoffs[d.name];
+        const projDate = projM!=null ? new Date(now.getFullYear(), now.getMonth()+projM, 1) : null;
+        if (days>0 && days<=90)
+          alerts.push({ level:'warn', title:`${d.name}: 0% rate ends in ${days} days`,
+            body: projDate && projDate>end
+              ? `Your current plan clears it after the deadline — after ${end.getDate()} ${MONTHS[end.getMonth()]} it starts charging ${d.postPromoApr??d.apr}%. Consider targeting it now.`
+              : `Clear the ${fmt(d.balance)} balance before ${end.getDate()} ${MONTHS[end.getMonth()]} to pay no interest on it at all.` });
+        else if (days<=0)
+          alerts.push({ level:'warn', title:`${d.name}: promo has ended`, body:`It's now charging ${d.postPromoApr??d.apr}% — it may deserve a higher priority.` });
+      }
+    });
+    if (sim && !sim.finished)
+      alerts.push({ level:'warn', title:'Your payments never clear the debt', body:'At current minimums plus extra, interest grows faster than you pay. Add more per month on the Plan tab, even a little.' });
+    state.categories.forEach(c=>{
+      if (Number(c.allocated)>0 && Number(c.spent)>Number(c.allocated))
+        alerts.push({ level:'warn', title:`${c.name} is over budget`, body:`You've spent ${fmt2(c.spent)} of ${fmt(c.allocated)} — ${fmt2(c.spent-c.allocated)} over. Trimming another category keeps the month on plan.` });
+    });
+    const m = money();
+    if (m.income>0 && m.freeCash<0)
+      alerts.push({ level:'warn', title:'This month is overcommitted', body:`Bills, minimums, extra debt payments and goals add up to ${fmt(m.income-m.freeCash)} against ${fmt(m.income)} income — ${fmt(-m.freeCash)} short. Something has to give.` });
+    const today = now.getDate();
+    state.bills.filter(b=>!b.paid && b.dueDay && b.dueDay>=today && b.dueDay<=today+7).forEach(b=>{
+      alerts.push({ level:'info', title:`${b.name} due on the ${ord(b.dueDay)}`, body:`${fmt2(b.amount)} — mark it paid on the Budget tab once it goes out.` });
+    });
+    return alerts;
+  }
+  const ord = n => n + (['th','st','nd','rd'][((n%100)>10 && (n%100)<14) ? 0 : Math.min(n%10,4)] || 'th');
+
+  function nextBestMove(){
+    const now = new Date();
+    const act = activeDebts();
+    if (!act.length) return null;
+    // 1) promo at risk beats everything
+    const sim = simulate(state.strategy, state.extraPayment, 0);
+    for (const d of act){
+      if (d.promoEnd){
+        const end = new Date(d.promoEnd);
+        const days = Math.ceil((end-now)/86400000);
+        const projM = sim && sim.payoffs[d.name];
+        const projDate = projM!=null ? new Date(now.getFullYear(), now.getMonth()+projM, 1) : null;
+        if (days>0 && days<=120 && projDate && projDate>end)
+          return { title:`Put spare money on ${d.name} first`,
+            why:`Its 0% rate ends ${end.getDate()} ${MONTHS[end.getMonth()]} (${days} days) and your current plan doesn't clear it in time — after that it charges ${d.postPromoApr??d.apr}%, roughly ${fmt(d.balance*(Number(d.postPromoApr??d.apr)/100/12))}/month in interest.` };
+      }
     }
-    const last = series[n-1];
-    const lx = pad + (w - pad*2), ly = h - pad - (last/max)*(h - pad*2);
-    pts.push(lx.toFixed(1) + ',' + ly.toFixed(1));
-    return `<svg viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" aria-label="Projected balance over time">
-      <polyline points="${pts.join(' ')}" fill="none" stroke="#d9a054" stroke-width="2"/>
-      <line x1="${pad}" y1="${h-pad}" x2="${w-pad}" y2="${h-pad}" stroke="#2a3341" stroke-width="1"/>
-    </svg>`;
+    // 2) strategy target
+    const target = [...act].sort(state.strategy==='avalanche' ? (a,b)=>effApr(b,now)-effApr(a,now)||a.balance-b.balance : (a,b)=>a.balance-b.balance)[0];
+    if (state.strategy==='avalanche')
+      return { title:`Anything spare goes on ${target.name}`,
+        why:`It's your most expensive debt at ${effApr(target,now)}% — every £100 paid off it saves about ${fmt2(100*(effApr(target,now)/100/12))} in interest every month from now on.` };
+    return { title:`Anything spare goes on ${target.name}`,
+      why:`It's your smallest balance at ${fmt(target.balance)} — clearing it frees up ${fmt2(target.minPayment)}/month and gives you a quick win.` };
   }
 
-  // ---------- TABS ----------
+  // ---------- month rollover ----------
+  function checkNewMonth(){
+    if (state.monthKey !== monthKeyNow()){
+      return true;
+    }
+    return false;
+  }
+  function startNewMonth(){
+    state.categories.forEach(c=> c.spent = 0);
+    state.bills.forEach(b=> b.paid = false);
+    state.monthKey = monthKeyNow();
+    logActivity('Started a new budget month');
+    save(); renderAll();
+    toast('New month — spends reset, bills unpaid');
+  }
+
+  // ---------- tabs ----------
   document.querySelectorAll('.tab').forEach(t=>{
     t.addEventListener('click', ()=>{
       document.querySelectorAll('.tab').forEach(x=>x.classList.remove('active'));
       t.classList.add('active');
-      ['overview','debts','budget'].forEach(v=>{
-        document.getElementById('view-'+v).style.display = (v===t.dataset.view)?'block':'none';
+      currentView = t.dataset.view;
+      ['home','plan','debts','budget','more'].forEach(v=>{
+        document.getElementById('view-'+v).style.display = (v===currentView)?'block':'none';
       });
+      window.scrollTo(0,0);
     });
   });
+  function goTab(name){ document.querySelector(`.tab[data-view="${name}"]`).click(); }
 
-  // ---------- CELEBRATION ----------
   document.getElementById('celebrate-close').onclick = ()=> document.getElementById('celebrate').classList.remove('show');
   function celebrate(name){
     const act = activeDebts().length;
-    document.getElementById('celebrate-title').textContent = escapeHtml(name) + ' — cleared';
-    document.getElementById('celebrate-sub').textContent = act === 0
+    document.getElementById('celebrate-title').textContent = name + ' — cleared';
+    document.getElementById('celebrate-sub').textContent = act===0
       ? 'That was the last one. You are debt-free.'
-      : act + ' debt' + (act>1?'s':'') + ' left. Its minimum payment now rolls into your attack.';
+      : act+' debt'+(act>1?'s':'')+' left. Its minimum payment now rolls into your attack.';
     document.getElementById('celebrate').classList.add('show');
   }
 
-  // ---------- RUNWAY ----------
-  function renderRunway(){
-    const totalOwed = state.debts.reduce((s,d)=>s+Number(d.balance||0),0);
-    const totalOriginal = state.debts.reduce((s,d)=>s+Number(d.original||d.balance||0),0);
-    const cleared = Math.max(totalOriginal - totalOwed, 0);
-    const pct = totalOriginal > 0 ? Math.round((cleared/totalOriginal)*100) : 0;
-    const blocks = 20, filled = Math.round((pct/100)*blocks);
-    let bar = '[';
-    for(let i=0;i<blocks;i++) bar += (i<filled) ? '█' : '░';
-    bar += ']';
-    document.getElementById('runway-bar').textContent = bar;
-    document.getElementById('runway-pct').textContent = pct + '%';
-    document.getElementById('runway-owed').textContent = fmt(totalOwed);
-    document.getElementById('runway-cleared').textContent = fmt(cleared);
-    const sim = simulate(state.strategy, state.extraPayment);
-    const dateEl = document.getElementById('runway-date');
-    if (sim && sim.finished){
-      dateEl.style.display = 'block';
-      dateEl.textContent = '→ debt-free ' + monthLabel(sim.months);
-    } else { dateEl.style.display = 'none'; }
+  // ---------- shared: log payment ----------
+  function logPayment(idx){
+    const d = state.debts[idx];
+    const amt = prompt('Payment toward "'+d.name+'" (£):', d.minPayment || '');
+    const val = parseFloat(amt);
+    if (isNaN(val) || val<=0) return;
+    d.payments = d.payments||[];
+    d.payments.push({ d:new Date().toISOString().slice(0,10), amt:val });
+    d.balance = Math.max(0, Number(d.balance)-val);
+    logActivity(`Paid ${fmt2(val)} toward ${d.name}`);
+    save(); renderAll();
+    if (d.balance<=0){ logActivity(`${d.name} fully cleared 🎉`); save(); celebrate(d.name); }
+    else toast(`${fmt2(val)} logged — ${d.name} now ${fmt2(d.balance)}`);
   }
 
-  // ---------- OVERVIEW ----------
-  function renderOverview(){
-    const el = document.getElementById('view-overview');
+  // ================= HOME =================
+  function renderHome(){
+    const el = document.getElementById('view-home');
+    const m = money();
     const totalOwed = state.debts.reduce((s,d)=>s+Number(d.balance||0),0);
-    const totalMin = activeDebts().reduce((s,d)=>s+Number(d.minPayment||0),0);
-    const totalAllocated = state.categories.reduce((s,c)=>s+Number(c.allocated||0),0);
-    const totalSpent = state.categories.reduce((s,c)=>s+Number(c.spent||0),0);
-    const leftover = Number(state.budgetIncome||0) - totalAllocated;
+    const totalOriginal = state.debts.reduce((s,d)=>s+Number(d.original||d.balance||0),0);
+    const clearedPct = totalOriginal>0 ? Math.round(((totalOriginal-totalOwed)/totalOriginal)*100) : 0;
+    const sim = simulate(state.strategy, state.extraPayment, 0);
+    const alerts = buildAlerts();
+    const move = nextBestMove();
+    const blocks=20, filled=Math.round((clearedPct/100)*blocks);
+    let bar='['; for(let i=0;i<blocks;i++) bar += i<filled?'█':'░'; bar+=']';
 
-    // Projections: chosen strategy, the other strategy, and minimums-only baseline
-    const simMain = simulate(state.strategy, state.extraPayment);
-    const other = state.strategy === 'avalanche' ? 'snowball' : 'avalanche';
-    const simOther = simulate(other, state.extraPayment);
-    const simBase = simulate(state.strategy, 0);
+    const newMonthCard = checkNewMonth() ? `
+      <div class="alert info">
+        <div style="flex:1">
+          <div class="t-card" style="font-size:15px">A new month has started</div>
+          <div class="t-help">Reset category spending and bill statuses to begin ${MONTHS[new Date().getMonth()]} fresh? Your allocations stay as they are.</div>
+          <button class="btn sm" style="margin-top:10px" id="home-new-month">Start ${MONTHS[new Date().getMonth()]}</button>
+        </div>
+      </div>` : '';
 
-    let projHtml = '<div class="empty-state">Add debts to see your payoff projection</div>';
-    if (simMain){
-      const saved = (simBase && simBase.finished && simMain.finished) ? simBase.totalInterest - simMain.totalInterest : null;
-      const fasterMonths = (simBase && simBase.finished && simMain.finished) ? simBase.months - simMain.months : null;
-      const otherDiff = (simOther && simOther.finished && simMain.finished) ? simOther.totalInterest - simMain.totalInterest : null;
-      projHtml = `
+    el.innerHTML = `
+      ${newMonthCard}
+      <div class="card hi" style="text-align:center; padding:22px 16px;">
+        ${sim && sim.finished
+          ? `<div class="t-micro" style="text-transform:uppercase; letter-spacing:0.08em;">debt-free</div>
+             <div class="hero-num">${monthLabel(sim.months)}</div>
+             <div class="t-help" style="margin-top:4px;">${sim.months} months away · ${fmt(totalOwed)} still owed</div>`
+          : state.debts.length
+            ? `<div class="hero-num" style="color:var(--clay)">no clear date</div>
+               <div class="t-help" style="margin-top:4px;">current payments don't clear the debt — <a href="#" id="home-goto-plan" style="color:var(--amber)">fix the plan</a></div>`
+            : `<div class="t-card">Welcome to Runway</div>
+               <div class="t-help" style="margin-top:6px;">Add your debts and income and it'll tell you where you stand, what to pay first, and when you'll be free.</div>`}
+        <div style="font-family:var(--mono); font-size:15px; letter-spacing:-1px; color:var(--amber); margin-top:14px;">${bar}</div>
+        <div class="t-micro" style="margin-top:6px;">${clearedPct}% of original debt cleared</div>
+      </div>
+
+      ${move ? `<div class="card" style="border-left:3px solid var(--amber);">
+        <div class="t-micro" style="text-transform:uppercase; letter-spacing:0.08em;">next best move</div>
+        <div class="t-card" style="margin-top:6px;">${esc(move.title)}</div>
+        <div class="t-help" style="margin-top:6px;">${esc(move.why)}</div>
+      </div>` : ''}
+
+      ${alerts.length ? `<div class="section"><span class="t-section">Needs attention</span></div>
+        ${alerts.map(a=>`<div class="alert ${a.level==='info'?'info':''}">
+          <div><div style="font-size:14.5px; font-weight:600;">${esc(a.title)}</div>
+          <div class="t-help">${esc(a.body)}</div></div></div>`).join('')}` : ''}
+
+      <div class="section"><span class="t-section">This month</span></div>
+      <div class="grid2">
+        <div class="stat"><div class="t-micro">free cash left</div><div class="t-stat" style="color:${m.freeCash<0?'var(--clay)':'var(--sage)'}">${fmt(m.freeCash)}</div><div class="t-micro">after bills, minimums, extra &amp; goals</div></div>
+        <div class="stat"><div class="t-micro">total owed</div><div class="t-stat">${fmt(totalOwed)}</div><div class="t-micro">${activeDebts().length} active debt${activeDebts().length===1?'':'s'}</div></div>
+        <div class="stat"><div class="t-micro">committed monthly</div><div class="t-stat">${fmt(m.billsTotal+m.minTotal)}</div><div class="t-micro">bills ${fmt(m.billsTotal)} + minimums ${fmt(m.minTotal)}</div></div>
+        <div class="stat"><div class="t-micro">attacking debt with</div><div class="t-stat" style="color:var(--amber)">${fmt(m.extra)}</div><div class="t-micro">extra per month — set on Plan</div></div>
+      </div>
+
+      <div class="section"><span class="t-section">Quick actions</span></div>
+      <div class="quick-actions">
+        <button class="qa" id="qa-pay">Log a payment<div class="micro t-micro">reduce a debt</div></button>
+        <button class="qa" id="qa-spend">Log spending<div class="micro t-micro">against a category</div></button>
+        <button class="qa" id="qa-debt">Add a debt<div class="micro t-micro">card, loan, BNPL…</div></button>
+        <button class="qa" id="qa-bill">Add a bill<div class="micro t-micro">recurring commitment</div></button>
+      </div>
+
+      ${state.activity.length ? `<div class="section"><span class="t-section">Recent activity</span><button class="mini-btn" id="home-all-activity">see all</button></div>
+      <div class="card" style="padding:6px 16px;">
+        ${state.activity.slice(0,4).map(a=>`<div class="activity-item"><span>${esc(a.txt)}</span><span class="t-micro">${a.d.slice(5)}</span></div>`).join('')}
+      </div>` : ''}
+    `;
+    const gp = document.getElementById('home-goto-plan');
+    if (gp) gp.onclick = (e)=>{ e.preventDefault(); goTab('plan'); };
+    const nm = document.getElementById('home-new-month');
+    if (nm) nm.onclick = startNewMonth;
+    const aa = document.getElementById('home-all-activity');
+    if (aa) aa.onclick = ()=> goTab('more');
+    document.getElementById('qa-pay').onclick = ()=>{
+      const act = activeDebts();
+      if (!act.length){ toast('No active debts — add one first'); return; }
+      goTab('debts');
+    };
+    document.getElementById('qa-spend').onclick = ()=>{ goTab('budget'); };
+    document.getElementById('qa-debt').onclick = ()=>{ goTab('debts'); setTimeout(()=>{ const b=document.getElementById('show-debt-form'); if(b) b.click(); }, 50); };
+    document.getElementById('qa-bill').onclick = ()=>{ goTab('budget'); setTimeout(()=>{ const b=document.getElementById('show-bill-form'); if(b) b.click(); }, 50); };
+  }
+
+  // ================= PLAN =================
+  function renderPlan(){
+    const el = document.getElementById('view-plan');
+    const simMain = simulate(state.strategy, state.extraPayment, 0);
+    if (!simMain){
+      el.innerHTML = `<div class="empty">Add debts on the Debts tab and your payoff plan, comparisons and what-if tools appear here.</div>`;
+      return;
+    }
+    const other = state.strategy==='avalanche' ? 'snowball' : 'avalanche';
+    const simOther = simulate(other, state.extraPayment, 0);
+    const simBase = simulate(state.strategy, 0, 0);
+    const sim50 = simulate(state.strategy, state.extraPayment+50, 0);
+    const sim100 = simulate(state.strategy, state.extraPayment+100, 0);
+    const lump = Number(state.lumpSum)||0;
+    const simLump = lump>0 ? simulate(state.strategy, state.extraPayment, lump) : null;
+    const totalOwed = activeDebts().reduce((s,d)=>s+Number(d.balance),0);
+
+    const stratWhy = state.strategy==='avalanche'
+      ? `Avalanche targets the highest interest rate first — it's the cheapest route mathematically. Trade-off: your first cleared debt may take longer, so it needs patience.`
+      : `Snowball targets the smallest balance first — quick wins keep motivation up. Trade-off: it usually costs a bit more in interest than avalanche.`;
+    const stratDiff = (simOther && simOther.finished && simMain.finished) ? simOther.totalInterest - simMain.totalInterest : null;
+
+    const scenRow = (label, s) => s && s.finished
+      ? `<tr><td>${label}</td><td>${monthLabel(s.months)}</td><td>${s.months}mo</td><td>${fmt(s.totalInterest)}</td></tr>`
+      : `<tr><td>${label}</td><td colspan="3" style="color:var(--clay)">never clears</td></tr>`;
+
+    el.innerHTML = `
+      <div class="section"><span class="t-section">Strategy</span></div>
       <div class="card">
-        <div class="strategy-toggle" role="tablist">
-          <button id="strat-aval" class="${state.strategy==='avalanche'?'active':''}">Avalanche · rate first</button>
-          <button id="strat-snow" class="${state.strategy==='snowball'?'active':''}">Snowball · smallest first</button>
+        <div class="strategy-toggle">
+          <button id="strat-aval" class="${state.strategy==='avalanche'?'active':''}">Avalanche</button>
+          <button id="strat-snow" class="${state.strategy==='snowball'?'active':''}">Snowball</button>
         </div>
-        <div class="proj-hero">
-          ${simMain.finished
-            ? `<div class="proj-date">${monthLabel(simMain.months)}</div>
-               <div class="proj-sub">debt-free in ${simMain.months} months · ${fmt(simMain.totalInterest)} total interest</div>`
-            : `<div class="proj-date" style="color:var(--clay)">never</div>
-               <div class="proj-sub">current payments don't outrun the interest — add extra below</div>`}
-        </div>
-        <div class="field" style="margin-bottom:6px">
+        <div class="t-help">${stratWhy}</div>
+        ${stratDiff!=null && Math.abs(stratDiff)>0.5 ? `<div class="t-help" style="margin-top:8px; color:${stratDiff>0?'var(--sage)':'var(--clay)'}">Right now, ${state.strategy} ${stratDiff>0?'saves you':'costs you'} ${fmt(Math.abs(stratDiff))} in interest compared to ${other}.</div>` : ''}
+        <div class="t-help" style="margin-top:8px; color:var(--text-3);">Promo deadlines are handled automatically — a 0% debt jumps up the priority order the moment its rate flips.</div>
+      </div>
+
+      <div class="section"><span class="t-section">Your plan</span></div>
+      <div class="card">
+        <div class="field" style="margin-bottom:8px;">
           <label>Extra toward debt each month (£)</label>
           <input id="extra-input" type="number" inputmode="decimal" value="${state.extraPayment||''}" placeholder="0"/>
         </div>
-        <div class="proj-compare">
-          ${fasterMonths != null && state.extraPayment > 0 ? `<div class="proj-cell">vs minimums only<b>${fasterMonths} months sooner</b></div>` : ''}
-          ${saved != null && saved > 0.5 ? `<div class="proj-cell">interest saved<b>${fmt(saved)}</b></div>` : ''}
-          ${otherDiff != null && Math.abs(otherDiff) > 0.5 ? `<div class="proj-cell">${other} would cost<b style="color:${otherDiff>0?'var(--clay)':'var(--sage)'}">${otherDiff>0?'+':''}${fmt(otherDiff)}</b></div>` : ''}
-          ${simMain.finished ? `<div class="proj-cell">total to pay<b>${fmt(totalOwed + simMain.totalInterest)}</b></div>` : ''}
-        </div>
-        <div class="chart-wrap">${sparkline(simMain.series)}</div>
-        <div class="milestones">
-          ${[25,50,75,100].map(m=>{
-            const totalOriginal = state.debts.reduce((s,d)=>s+Number(d.original||d.balance||0),0);
-            const clearedPct = totalOriginal>0 ? ((totalOriginal-totalOwed)/totalOriginal)*100 : 0;
-            return `<div class="milestone ${clearedPct>=m?'hit':''}">${clearedPct>=m?'●':'○'} ${m}%</div>`;
-          }).join('')}
-        </div>
-      </div>`;
-    }
-
-    el.innerHTML = `
-      <div class="section-label">Payoff plan</div>
-      ${projHtml}
-      <div class="section-label">Snapshot</div>
-      <div class="overview-grid">
-        <div class="stat"><div class="stat-label">Total owed</div><div class="stat-value">${fmt(totalOwed)}</div></div>
-        <div class="stat"><div class="stat-label">Min payments/mo</div><div class="stat-value">${fmt(totalMin)}</div></div>
-        <div class="stat"><div class="stat-label">Budgeted/mo</div><div class="stat-value">${fmt(totalAllocated)}</div></div>
-        <div class="stat"><div class="stat-label">Left after budget</div><div class="stat-value" style="color:${leftover<0?'var(--clay)':'var(--sage)'}">${fmt(leftover)}</div></div>
+        ${simMain.finished
+          ? `<div class="t-help">With ${fmt(state.extraPayment)} extra a month you're debt-free in <b style="color:var(--sage)">${monthLabel(simMain.months)}</b>, paying ${fmt(simMain.totalInterest)} interest in total (${fmt(totalOwed+simMain.totalInterest)} altogether).</div>
+             ${simBase && simBase.finished && state.extraPayment>0 ? `<div class="t-help" style="margin-top:6px;">That's <b>${simBase.months-simMain.months} months sooner</b> and <b>${fmt(simBase.totalInterest-simMain.totalInterest)} less interest</b> than paying only the minimums.</div>` : ''}`
+          : `<div class="t-help" style="color:var(--clay)">These payments never clear the debt — interest outruns them. Increase the extra amount.</div>`}
+        <div class="chart-wrap">${sparkline([
+          simBase ? {series:simBase.series, color:'#7d8695', dash:'4 4'} : null,
+          {series:simMain.series, color:'#dca75e'}
+        ].filter(Boolean))}</div>
+        <div class="t-micro" style="margin-top:4px;">amber: your plan · grey dashes: minimums only</div>
       </div>
-      <div class="section-label">Backup &amp; import</div>
+
+      <div class="section"><span class="t-section">Compare scenarios</span></div>
       <div class="card">
-        <div class="card-meta" style="margin-bottom:10px; margin-top:0;">Copy your data out as text, restore it later, or import debts &amp; budget categories from a spreadsheet (.xlsx / .csv). Everything stays on this device.</div>
-        <div class="row2">
-          <button class="mini-btn" id="backup-copy" style="flex:1; padding:8px 0;">copy backup</button>
-          <button class="mini-btn" id="backup-restore" style="flex:1; padding:8px 0;">restore</button>
-          <button class="mini-btn" id="import-excel" style="flex:1; padding:8px 0;">import sheet</button>
-        </div>
-        <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" style="display:none"/>
-        <textarea id="backup-box" placeholder="Backup text appears here / paste here to restore" style="display:none; width:100%; margin-top:10px; background:var(--bg); border:1px solid var(--line); color:var(--text); border-radius:6px; font-family:var(--mono); font-size:11px; padding:8px; min-height:70px;"></textarea>
-        <div id="backup-msg" class="card-meta" style="margin-top:8px; display:none;"></div>
+        <table class="scen-table">
+          <tr><th>plan</th><th>debt-free</th><th>time</th><th>interest</th></tr>
+          ${scenRow('Minimums only', simBase)}
+          ${scenRow('Current (+'+fmt(state.extraPayment)+')', simMain)}
+          ${scenRow('+£50 more', sim50)}
+          ${scenRow('+£100 more', sim100)}
+        </table>
+        ${sim50 && sim50.finished && simMain.finished ? `<div class="t-help" style="margin-top:10px;">Adding £50/month cuts ${simMain.months-sim50.months} month${simMain.months-sim50.months===1?'':'s'} off and saves ${fmt(simMain.totalInterest-sim50.totalInterest)}.</div>` : ''}
       </div>
+
+      <div class="section"><span class="t-section">What if: lump sum</span></div>
+      <div class="card">
+        <div class="field" style="margin-bottom:8px;">
+          <label>One-off payment today (£)</label>
+          <input id="lump-input" type="number" inputmode="decimal" value="${state.lumpSum||''}" placeholder="e.g. 500"/>
+        </div>
+        ${simLump && simLump.finished && simMain.finished
+          ? `<div class="t-help">A ${fmt(lump)} lump sum on your ${state.strategy} target today brings debt-free forward <b>${simMain.months-simLump.months} month${simMain.months-simLump.months===1?'':'s'}</b> and saves <b>${fmt(simMain.totalInterest-simLump.totalInterest)}</b> in interest. This is a what-if — log it as a real payment on the Debts tab when you make it.</div>`
+          : `<div class="t-help" style="color:var(--text-3)">Enter an amount to see what a one-off payment would do to your date and interest.</div>`}
+      </div>
+
+      ${state.goals.length ? `<div class="section"><span class="t-section">Goals trade-off</span></div>
+      <div class="card">
+        ${(()=>{
+          const gm = state.goals.reduce((s,g)=>s+Number(g.monthly||0),0);
+          if (gm<=0) return '<div class="t-help" style="color:var(--text-3)">Your goals have no monthly contributions set.</div>';
+          const simNoGoals = simulate(state.strategy, state.extraPayment+gm, 0);
+          return simNoGoals && simNoGoals.finished && simMain.finished
+            ? `<div class="t-help">You're putting ${fmt(gm)}/month into goals. Pausing that and attacking debt instead would make you debt-free <b>${simMain.months-simNoGoals.months} month${simMain.months-simNoGoals.months===1?'':'s'} sooner</b> and save ${fmt(simMain.totalInterest-simNoGoals.totalInterest)} interest. Whether that trade is worth it is up to you — an emergency cushion has value no spreadsheet shows.</div>`
+            : '';
+        })()}
+      </div>` : ''}
     `;
-
-    document.getElementById('strat-aval').onclick = ()=>{ state.strategy='avalanche'; save(); renderAll(); };
-    document.getElementById('strat-snow').onclick = ()=>{ state.strategy='snowball'; save(); renderAll(); };
-    const extraInput = document.getElementById('extra-input');
-    if (extraInput) extraInput.onchange = (e)=>{ state.extraPayment = Math.max(0, parseFloat(e.target.value)||0); save(); renderAll(); };
-
-    wireBackup();
+    document.getElementById('strat-aval').onclick = ()=>{ state.strategy='avalanche'; logActivity('Switched strategy to avalanche'); save(); renderAll(); };
+    document.getElementById('strat-snow').onclick = ()=>{ state.strategy='snowball'; logActivity('Switched strategy to snowball'); save(); renderAll(); };
+    document.getElementById('extra-input').onchange = e=>{ state.extraPayment = Math.max(0, parseFloat(e.target.value)||0); logActivity(`Set extra debt payment to ${fmt(state.extraPayment)}/mo`); save(); renderAll(); };
+    document.getElementById('lump-input').onchange = e=>{ state.lumpSum = Math.max(0, parseFloat(e.target.value)||0); save(); renderPlan(); };
   }
 
-  function wireBackup(){
-    const box = document.getElementById('backup-box');
-    const msg = document.getElementById('backup-msg');
-    if (!box) return;
-    function note(t, ok){ msg.style.display='block'; msg.style.color = ok?'var(--sage)':'var(--clay)'; msg.textContent = t; }
-    document.getElementById('backup-copy').onclick = async ()=>{
-      const data = JSON.stringify(state);
-      box.style.display = 'block'; box.value = data; box.select();
-      try { await navigator.clipboard.writeText(data); note('Copied — paste it somewhere safe (notes app, message to yourself).', true); }
-      catch(e){ note('Clipboard blocked — long-press the text above and copy it manually.', false); }
-    };
-    document.getElementById('backup-restore').onclick = ()=>{
-      if (box.style.display !== 'block'){ box.style.display='block'; box.value=''; box.focus(); note('Paste your backup text above, then tap restore again.', true); return; }
-      try {
-        const parsed = JSON.parse(box.value.trim());
-        if (!parsed || typeof parsed !== 'object' || !Array.isArray(parsed.debts)) throw new Error('bad shape');
-        state = migrate({ debts: parsed.debts||[], budgetIncome: Number(parsed.budgetIncome)||0, categories: parsed.categories||[], strategy: parsed.strategy, extraPayment: parsed.extraPayment });
-        save(); renderAll();
-        note('Restored.', true);
-      } catch(e){ note("That doesn't look like a valid backup — check you pasted the whole thing.", false); }
-    };
-
-    const fileInput = document.getElementById('excel-file');
-    document.getElementById('import-excel').onclick = ()=>{
-      if (typeof XLSX === 'undefined'){ note('Spreadsheet library failed to load — check your connection and reopen the app.', false); return; }
-      fileInput.click();
-    };
-    fileInput.onchange = async (e)=>{
-      const file = e.target.files[0];
-      if (!file) return;
-      try {
-        const buf = await file.arrayBuffer();
-        const wb = XLSX.read(buf, { type: 'array' });
-        const cleanNum = v => { if (typeof v === 'number') return v; const n = parseFloat(String(v ?? '').replace(/[£$,%\s]/g, '')); return isNaN(n) ? 0 : n; };
-        const norm = s => String(s ?? '').toLowerCase().replace(/[^a-z]/g,'');
-        const NAME_H=['name','debt','debtname','loan','account'], BAL_H=['balance','amount','owed','outstanding','remaining'],
-              APR_H=['apr','rate','interest','interestrate','aprpercent'], MIN_H=['minpayment','min','minimum','minimumpayment','monthlypayment','payment','monthly','permonth'],
-              CAT_H=['category','categoryname','budgetcategory','pot','potname'], ALLOC_H=['allocated','allocation','budget','budgeted','limit','monthlybudget'], SPENT_H=['spent','spend','used','actual'];
-        const findCol = (cells, names) => cells.findIndex(c => names.includes(norm(c)));
-        let newDebts = [], newCats = [];
-        wb.SheetNames.forEach(sn => {
-          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: '' });
-          let mode = null, cols = {};
-          rows.forEach(r => {
-            const nameCol = findCol(r, NAME_H), balCol = findCol(r, BAL_H);
-            const catCol = findCol(r, CAT_H), allocCol = findCol(r, ALLOC_H);
-            if (nameCol >= 0 && balCol >= 0){ mode='debt'; cols={ name:nameCol, bal:balCol, apr:findCol(r,APR_H), min:findCol(r,MIN_H) }; return; }
-            if (catCol >= 0 && allocCol >= 0){ mode='cat'; cols={ name:catCol, alloc:allocCol, spent:findCol(r,SPENT_H) }; return; }
-            if (!mode) return;
-            const label = String(r[cols.name] ?? '').trim();
-            if (!label) return;
-            if (norm(label).startsWith('total')){ mode=null; return; }
-            if (mode==='debt'){
-              const bal = cleanNum(r[cols.bal]);
-              if (bal > 0) newDebts.push({ name: label, balance: bal, original: bal, apr: cols.apr>=0?cleanNum(r[cols.apr]):0, minPayment: cols.min>=0?cleanNum(r[cols.min]):0, payments: [], promoEnd: null, postPromoApr: null });
-            } else {
-              const alloc = cleanNum(r[cols.alloc]);
-              if (alloc > 0) newCats.push({ name: label, allocated: alloc, spent: cols.spent>=0?cleanNum(r[cols.spent]):0 });
-            }
-          });
-        });
-        if (!newDebts.length && !newCats.length){ note('No recognisable rows. Debts need Name + Balance columns; budget rows need Category + Allocated.', false); fileInput.value=''; return; }
-        const replace = (state.debts.length || state.categories.length)
-          ? confirm(`Found ${newDebts.length} debt(s) and ${newCats.length} budget categorie(s).\n\nOK = REPLACE existing data\nCancel = ADD to existing data`)
-          : true;
-        if (replace){ if (newDebts.length) state.debts = newDebts; if (newCats.length) state.categories = newCats; }
-        else { state.debts = state.debts.concat(newDebts); state.categories = state.categories.concat(newCats); }
-        save(); renderAll();
-        const msg2 = document.getElementById('backup-msg');
-        if (msg2){ msg2.style.display='block'; msg2.style.color='var(--sage)'; msg2.textContent = `Imported ${newDebts.length} debt(s), ${newCats.length} categorie(s) from ${file.name}.`; }
-      } catch(err){ note("Could not read that file — make sure it's a valid .xlsx or .csv.", false); }
-      fileInput.value = '';
-    };
-  }
-
-  // ---------- DEBTS ----------
+  // ================= DEBTS =================
   function renderDebts(){
     const el = document.getElementById('view-debts');
     const now = new Date();
-    const simMain = simulate(state.strategy, state.extraPayment);
+    const simMain = simulate(state.strategy, state.extraPayment, 0);
     const act = activeDebts().sort(state.strategy==='avalanche'
-      ? (a,b)=> effApr(b,now)-effApr(a,now) || Number(a.balance)-Number(b.balance)
-      : (a,b)=> Number(a.balance)-Number(b.balance));
-    const done = state.debts.filter(d => Number(d.balance) <= 0);
+      ? (a,b)=>effApr(b,now)-effApr(a,now)||Number(a.balance)-Number(b.balance)
+      : (a,b)=>Number(a.balance)-Number(b.balance));
+    const done = state.debts.filter(d=>Number(d.balance)<=0);
 
-    let list = act.length || done.length ? '' : '<div class="empty-state">No debts added yet</div>';
+    let list = act.length||done.length ? '' : `<div class="empty">No debts yet. Add each card, loan or plan below — balance, rate and minimum payment is all it needs to build your payoff plan.</div>`;
     act.forEach((d, idx)=>{
       const realIdx = state.debts.indexOf(d);
       const original = Number(d.original||d.balance||0);
-      const pctPaid = original>0 ? Math.min(100, Math.round(((original-Number(d.balance||0))/original)*100)) : 0;
-      let deadlineHtml = '';
+      const pctPaid = original>0 ? Math.min(100, Math.round(((original-Number(d.balance))/original)*100)) : 0;
+      const projM = simMain && simMain.payoffs[d.name];
+      let promoLine='';
       if (d.promoEnd){
-        const end = new Date(d.promoEnd);
-        const days = Math.ceil((end - now) / 86400000);
-        const projMonths = simMain && simMain.payoffs[d.name];
-        const projDate = projMonths != null ? new Date(now.getFullYear(), now.getMonth()+projMonths, 1) : null;
-        const atRisk = projDate && projDate > end;
-        deadlineHtml = days > 0
-          ? `<div class="card-meta" style="color:${atRisk || days < 60 ? 'var(--clay)' : 'var(--text-dim)'}">promo ends ${end.getDate()} ${MONTHS[end.getMonth()]} — ${days}d left${atRisk ? ' · projected payoff MISSES this' : ''}</div>`
-          : `<div class="card-meta" style="color:var(--clay)">promo ended — now at ${d.postPromoApr ?? d.apr}%</div>`;
+        const end=new Date(d.promoEnd), days=Math.ceil((end-now)/86400000);
+        const projDate = projM!=null ? new Date(now.getFullYear(), now.getMonth()+projM, 1) : null;
+        const atRisk = projDate && projDate>end;
+        promoLine = days>0
+          ? `<div class="meta" style="color:${atRisk||days<60?'var(--clay)':'var(--text-2)'}">0% ends ${end.getDate()} ${MONTHS[end.getMonth()]} · ${days} days left${atRisk?' · plan misses this deadline':''}</div>`
+          : `<div class="meta" style="color:var(--clay)">Promo over — now charging ${d.postPromoApr??d.apr}%</div>`;
       }
-      const projMonths = simMain && simMain.payoffs[d.name];
+      const interestMo = Number(d.balance)*(effApr(d,now)/100/12);
       list += `<div class="card">
         <div class="card-row">
           <div style="min-width:0">
-            <div class="card-name">${escapeHtml(d.name)} ${idx===0?'<span class="badge priority">target</span>':''}</div>
-            <div class="card-meta">${effApr(d, now)}% APR · min ${fmt2(d.minPayment)}/mo${projMonths != null && simMain.finished ? ' · clear by ' + monthLabel(projMonths) : ''}</div>
-            ${deadlineHtml}
+            <div class="t-card">${esc(d.name)} ${idx===0?'<span class="badge priority">pay first</span>':''}</div>
+            <div class="meta">${effApr(d,now)}% · min ${fmt2(d.minPayment)}/mo${projM!=null && simMain.finished ? ' · gone by '+monthLabel(projM) : ''}</div>
+            ${promoLine}
           </div>
-          <div class="card-amount">${fmt2(d.balance)}</div>
+          <div class="t-stat">${fmt2(d.balance)}</div>
         </div>
         <div class="bar-track"><div class="bar-fill" style="width:${pctPaid}%; background:var(--amber)"></div></div>
-        <div class="row2" style="margin-top:10px">
-          <button class="mini-btn accent" data-pay="${realIdx}" style="flex:1">log payment</button>
-          <button class="mini-btn" data-edit="${realIdx}">edit</button>
-          <button class="mini-btn" data-remove-debt="${realIdx}">remove</button>
+        <div class="micro">${pctPaid}% of the original ${fmt(original)} paid off${interestMo>0.5 ? ' · costing about '+fmt2(interestMo)+'/mo in interest right now' : ''}</div>
+        <div class="row2" style="margin-top:12px">
+          <button class="mini-btn accent" data-pay="${realIdx}">Log payment</button>
+          <button class="mini-btn" data-edit="${realIdx}">Edit</button>
         </div>
+        <details class="debt-detail">
+          <summary>History &amp; more</summary>
+          ${d.payments && d.payments.length
+            ? `<div class="pay-history">${d.payments.slice(-8).reverse().map(p=>`<div><span>${p.d}</span><span>${fmt2(p.amt)}</span></div>`).join('')}</div>
+               <div class="micro">${d.payments.length} payment${d.payments.length===1?'':'s'} logged · ${fmt2(d.payments.reduce((s,p)=>s+p.amt,0))} total</div>`
+            : `<div class="t-help" style="color:var(--text-3); margin-top:6px;">No payments logged yet.</div>`}
+          <button class="mini-btn" data-remove-debt="${realIdx}" style="margin-top:10px; border-color:var(--clay-dim); color:var(--clay);">Remove debt</button>
+        </details>
       </div>`;
     });
     done.forEach(d=>{
       const realIdx = state.debts.indexOf(d);
-      list += `<div class="card cleared">
-        <div class="card-row">
-          <div>
-            <div class="card-name">${escapeHtml(d.name)} <span class="badge done">cleared ✓</span></div>
-            <div class="card-meta">was ${fmt(d.original)}</div>
-          </div>
-          <button class="mini-btn" data-remove-debt="${realIdx}">remove</button>
-        </div>
-      </div>`;
+      list += `<div class="card cleared"><div class="card-row">
+        <div><div class="t-card">${esc(d.name)} <span class="badge ok">cleared ✓</span></div>
+        <div class="meta">was ${fmt(d.original)}</div></div>
+        <button class="mini-btn" data-remove-debt="${realIdx}">Remove</button>
+      </div></div>`;
     });
 
-    const editing = editingIndex != null ? state.debts[editingIndex] : null;
+    const editing = editingIndex!=null ? state.debts[editingIndex] : null;
     el.innerHTML = `
-      <div class="section-label">Debts <span style="font-weight:400">${state.strategy} order</span></div>
+      <div class="section"><span class="t-section">Debts</span><span class="t-micro">${state.strategy} order</span></div>
       ${list}
       <button class="plus" id="show-debt-form">+ add debt</button>
-      <div class="add-form ${editing?'open':''}" id="debt-form">
-        <div class="field"><label>Name</label><input id="d-name" placeholder="e.g. Credit union loan" value="${editing?escapeHtml(editing.name):''}"/></div>
+      <div class="form ${editing?'open':''}" id="debt-form">
+        <div class="field"><label>Name</label><input id="d-name" placeholder="e.g. Credit union loan" value="${editing?esc(editing.name):''}"/></div>
         <div class="row2">
           <div class="field"><label>Balance (£)</label><input id="d-balance" type="number" inputmode="decimal" placeholder="0" value="${editing?editing.balance:''}"/></div>
           <div class="field"><label>APR now (%)</label><input id="d-apr" type="number" inputmode="decimal" placeholder="0" value="${editing?editing.apr:''}"/></div>
         </div>
-        <div class="field"><label>Min payment/mo (£)</label><input id="d-min" type="number" inputmode="decimal" placeholder="0" value="${editing?editing.minPayment:''}"/></div>
+        <div class="field"><label>Minimum payment / month (£)</label><input id="d-min" type="number" inputmode="decimal" placeholder="0" value="${editing?editing.minPayment:''}"/></div>
         <div class="row2">
-          <div class="field"><label>Promo ends (optional)</label><input id="d-promo" type="date" value="${editing&&editing.promoEnd?editing.promoEnd:''}"/></div>
-          <div class="field"><label>APR after promo (%)</label><input id="d-post-apr" type="number" inputmode="decimal" placeholder="—" value="${editing&&editing.postPromoApr!=null?editing.postPromoApr:''}"/></div>
+          <div class="field"><label>0% promo ends (optional)</label><input id="d-promo" type="date" value="${editing&&editing.promoEnd?editing.promoEnd:''}"/></div>
+          <div class="field"><label>Rate after promo (%)</label><input id="d-post-apr" type="number" inputmode="decimal" placeholder="—" value="${editing&&editing.postPromoApr!=null?editing.postPromoApr:''}"/></div>
         </div>
         <button class="btn" id="save-debt">${editing?'Update debt':'Save debt'}</button>
         <button class="btn ghost" id="cancel-debt">Cancel</button>
@@ -558,123 +692,381 @@
       const minPayment = parseFloat(document.getElementById('d-min').value)||0;
       const promoEnd = document.getElementById('d-promo').value || null;
       const postRaw = document.getElementById('d-post-apr').value;
-      const postPromoApr = postRaw === '' ? null : (parseFloat(postRaw)||0);
-      if (!name || balance <= 0) return;
-      if (editingIndex != null){
+      const postPromoApr = postRaw==='' ? null : (parseFloat(postRaw)||0);
+      if (!name){ toast('Give the debt a name'); return; }
+      if (balance<=0){ toast('Balance needs to be above zero'); return; }
+      if (editingIndex!=null){
         const d = state.debts[editingIndex];
         Object.assign(d, { name, balance, apr, minPayment, promoEnd, postPromoApr });
         if (balance > Number(d.original||0)) d.original = balance;
-        editingIndex = null;
+        logActivity(`Edited ${name}`);
+        editingIndex=null;
       } else {
-        state.debts.push({ name, balance, original: balance, apr, minPayment, promoEnd, postPromoApr, payments: [] });
+        state.debts.push({ name, balance, original:balance, apr, minPayment, promoEnd, postPromoApr, payments:[] });
+        logActivity(`Added debt: ${name} (${fmt(balance)})`);
       }
       save(); renderAll();
     };
     el.querySelectorAll('[data-remove-debt]').forEach(btn=>{
-      btn.onclick = ()=>{ if(confirm('Remove this debt entirely? (Clearing it by logging payments keeps your progress.)')){ state.debts.splice(parseInt(btn.dataset.removeDebt),1); editingIndex=null; save(); renderAll(); } };
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.removeDebt);
+        if (confirm(`Remove "${state.debts[i].name}" entirely? Its history goes with it. (Paying it to zero keeps your progress instead.)`)){
+          logActivity(`Removed debt: ${state.debts[i].name}`);
+          state.debts.splice(i,1); editingIndex=null; save(); renderAll();
+        } };
     });
     el.querySelectorAll('[data-edit]').forEach(btn=>{
-      btn.onclick = ()=>{ editingIndex = parseInt(btn.dataset.edit); renderDebts(); window.scrollTo(0, document.body.scrollHeight); };
+      btn.onclick = ()=>{ editingIndex=parseInt(btn.dataset.edit); renderDebts(); document.getElementById('debt-form').scrollIntoView({behavior:'smooth'}); };
     });
     el.querySelectorAll('[data-pay]').forEach(btn=>{
-      btn.onclick = ()=>{
-        const idx = parseInt(btn.dataset.pay);
-        const d = state.debts[idx];
-        const amt = prompt('Payment toward "' + d.name + '" (£):', d.minPayment || '');
-        const val = parseFloat(amt);
-        if (isNaN(val) || val <= 0) return;
-        d.payments = d.payments || [];
-        d.payments.push({ d: new Date().toISOString().slice(0,10), amt: val });
-        d.balance = Math.max(0, Number(d.balance) - val);
-        save(); renderAll();
-        if (d.balance <= 0) celebrate(d.name);
-      };
+      btn.onclick = ()=> logPayment(parseInt(btn.dataset.pay));
     });
   }
 
-  // ---------- BUDGET ----------
+  // ================= BUDGET =================
   function renderBudget(){
     const el = document.getElementById('view-budget');
     const now = new Date();
     const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
-    const monthPct = (now.getDate() / daysInMonth) * 100;
-    let list = state.categories.length ? '' : '<div class="empty-state">No budget categories yet</div>';
+    const monthPct = (now.getDate()/daysInMonth)*100;
+    const m = money();
+
+    let catList = state.categories.length ? '' : `<div class="empty">No spending categories yet. Add the flexible ones — groceries, fuel, going out — and log spends against them as you go.</div>`;
     state.categories.forEach((c, idx)=>{
-      const spent = Number(c.spent||0), allocated = Number(c.allocated||0);
-      const pct = allocated>0 ? Math.round((spent/allocated)*100) : 0;
-      const over = spent > allocated && allocated>0;
-      const tooFast = !over && allocated>0 && pct > monthPct + 8;
-      list += `<div class="card">
+      const spent=Number(c.spent||0), allocated=Number(c.allocated||0);
+      const pct = allocated>0 ? (spent/allocated)*100 : 0;
+      const paceTarget = allocated*(monthPct/100);
+      const over = spent>allocated && allocated>0;
+      const ahead = spent - paceTarget; // + means spending faster than the calendar
+      let paceCopy, badge, barColor;
+      if (over){ paceCopy = `${fmt2(spent-allocated)} over — trim elsewhere or top this up`; badge='<span class="badge warn">over</span>'; barColor='var(--clay)'; }
+      else if (allocated<=0){ paceCopy = 'No budget set'; badge=''; barColor='var(--line)'; }
+      else if (ahead > allocated*0.08){ paceCopy = `By today you'd be on track under ${fmt(paceTarget)} — you're ${fmt2(ahead)} ahead of pace`; badge='<span class="badge priority">fast pace</span>'; barColor='var(--amber)'; }
+      else { paceCopy = `${fmt2(allocated-spent)} left · ${ahead<-1 ? fmt2(-ahead)+' under pace — nicely done' : 'right on pace'}`; badge='<span class="badge ok">on track</span>'; barColor='var(--sage)'; }
+      catList += `<div class="card">
         <div class="card-row">
-          <div>
-            <div class="card-name">${escapeHtml(c.name)}</div>
-            <div class="card-meta">${fmt2(spent)} of ${fmt(allocated)}</div>
-          </div>
-          <span class="badge ${over?'over':(tooFast?'priority':'ok')}">${over?'over':(tooFast?'fast pace':pct+'%')}</span>
+          <div><div class="t-card">${esc(c.name)}</div>
+          <div class="meta">${fmt2(spent)} of ${fmt(allocated)}</div></div>
+          ${badge}
         </div>
-        <div class="bar-track" style="position:relative">
-          <div class="bar-fill" style="width:${Math.min(pct,100)}%; background:${over?'var(--clay)':(tooFast?'var(--amber)':'var(--sage)')}"></div>
+        <div class="bar-track">
+          <div class="bar-fill" style="width:${Math.min(pct,100)}%; background:${barColor}"></div>
+          ${allocated>0?`<div class="bar-pace" style="left:${Math.min(monthPct,100)}%" title="where today sits in the month"></div>`:''}
         </div>
-        <div class="card-meta" style="margin-top:5px">day ${now.getDate()} of ${daysInMonth} — pace marker at ${Math.round(monthPct)}%</div>
-        <div class="row2" style="margin-top:10px">
-          <button class="mini-btn accent" data-spend="${idx}" style="flex:1">+ log spend</button>
-          <button class="mini-btn" data-remove-cat="${idx}">remove</button>
+        <div class="micro">${paceCopy}</div>
+        <div class="row2" style="margin-top:12px">
+          <button class="mini-btn accent" data-spend="${idx}">Log spend</button>
+          <button class="mini-btn" data-edit-cat="${idx}">Edit</button>
+          <button class="mini-btn" data-remove-cat="${idx}">Remove</button>
         </div>
       </div>`;
     });
+
+    let billList = state.bills.length ? '' : `<div class="empty">Track fixed commitments here — rent, insurance, phone, subscriptions. They feed your free-cash number and upcoming reminders.</div>`;
+    const sortedBills = [...state.bills].sort((a,b)=>(a.dueDay||32)-(b.dueDay||32));
+    sortedBills.forEach(b=>{
+      const realIdx = state.bills.indexOf(b);
+      billList += `<div class="card" style="padding:13px 16px;">
+        <div class="card-row">
+          <div><div style="font-size:15px; font-weight:600;">${esc(b.name)}</div>
+          <div class="meta">${fmt2(b.amount)}/mo${b.dueDay?' · due the '+ord(b.dueDay):''}</div></div>
+          <div class="row2" style="margin-top:0">
+            <button class="mini-btn ${b.paid?'':'accent'}" data-bill-paid="${realIdx}">${b.paid?'paid ✓':'mark paid'}</button>
+            <button class="mini-btn" data-remove-bill="${realIdx}">×</button>
+          </div>
+        </div>
+      </div>`;
+    });
+
+    let goalList = state.goals.length ? '' : `<div class="empty">Savings goals — emergency fund, the Golf GTD fund, whatever. Set a target and a monthly amount and the Plan tab shows what it trades off against debt.</div>`;
+    state.goals.forEach((g, idx)=>{
+      const pct = Number(g.target)>0 ? Math.min(100, Math.round((Number(g.saved)/Number(g.target))*100)) : 0;
+      goalList += `<div class="card">
+        <div class="card-row">
+          <div><div class="t-card">${esc(g.name)}</div>
+          <div class="meta">${fmt(g.saved)} of ${fmt(g.target)}${Number(g.monthly)>0?' · adding '+fmt(g.monthly)+'/mo':''}</div></div>
+          <span class="badge ${pct>=100?'ok':'priority'}">${pct}%</span>
+        </div>
+        <div class="bar-track"><div class="bar-fill" style="width:${pct}%; background:var(--sage)"></div></div>
+        <div class="row2" style="margin-top:12px">
+          <button class="mini-btn accent" data-goal-add="${idx}">Add to it</button>
+          <button class="mini-btn" data-remove-goal="${idx}">Remove</button>
+        </div>
+      </div>`;
+    });
+
     el.innerHTML = `
-      <div class="section-label">Monthly income</div>
+      <div class="section"><span class="t-section">Income</span></div>
       <div class="card">
-        <input id="income-input" type="number" inputmode="decimal" value="${state.budgetIncome||''}" placeholder="£ per month" style="width:100%; background:transparent; border:none; color:var(--text); font-family:var(--mono); font-size:16px;"/>
+        <div class="field" style="margin-bottom:0">
+          <label>Take-home per month (£)</label>
+          <input id="income-input" type="number" inputmode="decimal" value="${state.budgetIncome||''}" placeholder="0"/>
+        </div>
+        ${m.income>0?`<div class="micro" style="margin-top:10px;">Bills ${fmt(m.billsTotal)} + minimums ${fmt(m.minTotal)} + extra debt ${fmt(m.extra)} + goals ${fmt(m.goalsTotal)} → <b style="color:${m.freeCash<0?'var(--clay)':'var(--sage)'}">${fmt(m.freeCash)} free</b> for the categories below</div>`:''}
       </div>
-      <div class="section-label">Categories
-        ${state.categories.length ? '<button class="mini-btn" id="new-month">start new month</button>' : ''}
+
+      <div class="section"><span class="t-section">Bills &amp; commitments</span><span class="t-micro">${fmt(m.billsTotal)}/mo</span></div>
+      ${billList}
+      <button class="plus" id="show-bill-form">+ add bill</button>
+      <div class="form" id="bill-form">
+        <div class="field"><label>Name</label><input id="b-name" placeholder="e.g. Car insurance"/></div>
+        <div class="row2">
+          <div class="field"><label>Monthly amount (£)</label><input id="b-amount" type="number" inputmode="decimal" placeholder="0"/></div>
+          <div class="field"><label>Due day (1–31)</label><input id="b-due" type="number" inputmode="numeric" min="1" max="31" placeholder="e.g. 15"/></div>
+        </div>
+        <button class="btn" id="save-bill">Save bill</button>
+        <button class="btn ghost" id="cancel-bill">Cancel</button>
       </div>
-      ${list}
+
+      <div class="section"><span class="t-section">Spending categories</span>
+        ${state.categories.length?'<button class="mini-btn" id="new-month">start new month</button>':''}
+      </div>
+      ${catList}
       <button class="plus" id="show-cat-form">+ add category</button>
-      <div class="add-form" id="cat-form">
+      <div class="form" id="cat-form">
         <div class="field"><label>Category name</label><input id="c-name" placeholder="e.g. Groceries"/></div>
-        <div class="field"><label>Allocated (£/mo)</label><input id="c-allocated" type="number" inputmode="decimal" placeholder="0"/></div>
+        <div class="field"><label>Budget per month (£)</label><input id="c-allocated" type="number" inputmode="decimal" placeholder="0"/></div>
         <button class="btn" id="save-cat">Save category</button>
         <button class="btn ghost" id="cancel-cat">Cancel</button>
       </div>
+
+      <div class="section"><span class="t-section">Savings goals</span></div>
+      ${goalList}
+      <button class="plus" id="show-goal-form">+ add goal</button>
+      <div class="form" id="goal-form">
+        <div class="field"><label>Goal name</label><input id="g-name" placeholder="e.g. Emergency fund"/></div>
+        <div class="row2">
+          <div class="field"><label>Target (£)</label><input id="g-target" type="number" inputmode="decimal" placeholder="1000"/></div>
+          <div class="field"><label>Saved so far (£)</label><input id="g-saved" type="number" inputmode="decimal" placeholder="0"/></div>
+        </div>
+        <div class="field"><label>Monthly contribution (£)</label><input id="g-monthly" type="number" inputmode="decimal" placeholder="0"/></div>
+        <button class="btn" id="save-goal">Save goal</button>
+        <button class="btn ghost" id="cancel-goal">Cancel</button>
+      </div>
     `;
-    document.getElementById('income-input').onchange = (e)=>{ state.budgetIncome = parseFloat(e.target.value)||0; save(); renderRunway(); renderOverview(); };
-    const nm = document.getElementById('new-month');
-    if (nm) nm.onclick = ()=>{
-      if (confirm('Reset all category spend to £0 for the new month? Allocations stay as they are.')){
-        state.categories.forEach(c=> c.spent = 0);
-        save(); renderAll();
-      }
+
+    document.getElementById('income-input').onchange = e=>{ state.budgetIncome = parseFloat(e.target.value)||0; save(); renderAll(); };
+    const nm = document.getElementById('new-month'); if (nm) nm.onclick = ()=>{ if (confirm('Reset all category spending to £0 and mark bills unpaid for the new month? Budgets stay as they are.')) startNewMonth(); };
+
+    // bills
+    document.getElementById('show-bill-form').onclick = ()=> document.getElementById('bill-form').classList.add('open');
+    document.getElementById('cancel-bill').onclick = ()=> document.getElementById('bill-form').classList.remove('open');
+    document.getElementById('save-bill').onclick = ()=>{
+      const name = document.getElementById('b-name').value.trim();
+      const amount = parseFloat(document.getElementById('b-amount').value)||0;
+      const dueDay = parseInt(document.getElementById('b-due').value)||null;
+      if (!name || amount<=0){ toast('A bill needs a name and an amount'); return; }
+      state.bills.push({ name, amount, dueDay, paid:false });
+      logActivity(`Added bill: ${name} (${fmt2(amount)}/mo)`);
+      save(); renderAll();
     };
+    el.querySelectorAll('[data-bill-paid]').forEach(btn=>{
+      btn.onclick = ()=>{ const b=state.bills[parseInt(btn.dataset.billPaid)]; b.paid=!b.paid;
+        if (b.paid) logActivity(`Marked ${b.name} paid`);
+        save(); renderAll(); };
+    });
+    el.querySelectorAll('[data-remove-bill]').forEach(btn=>{
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.removeBill);
+        if (confirm(`Remove the bill "${state.bills[i].name}"?`)){ logActivity(`Removed bill: ${state.bills[i].name}`); state.bills.splice(i,1); save(); renderAll(); } };
+    });
+
+    // categories
     document.getElementById('show-cat-form').onclick = ()=> document.getElementById('cat-form').classList.add('open');
     document.getElementById('cancel-cat').onclick = ()=> document.getElementById('cat-form').classList.remove('open');
     document.getElementById('save-cat').onclick = ()=>{
       const name = document.getElementById('c-name').value.trim();
       const allocated = parseFloat(document.getElementById('c-allocated').value)||0;
-      if (!name) return;
-      state.categories.push({ name, allocated, spent: 0 });
+      if (!name){ toast('Give the category a name'); return; }
+      state.categories.push({ name, allocated, spent:0 });
+      logActivity(`Added category: ${name}`);
       save(); renderAll();
     };
     el.querySelectorAll('[data-remove-cat]').forEach(btn=>{
-      btn.onclick = ()=>{ state.categories.splice(parseInt(btn.dataset.removeCat),1); save(); renderAll(); };
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.removeCat);
+        if (confirm(`Remove "${state.categories[i].name}" and its spending record for this month?`)){ state.categories.splice(i,1); save(); renderAll(); } };
+    });
+    el.querySelectorAll('[data-edit-cat]').forEach(btn=>{
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.editCat); const c=state.categories[i];
+        const v = prompt(`Monthly budget for "${c.name}" (£):`, c.allocated);
+        const n = parseFloat(v);
+        if (!isNaN(n) && n>=0){ c.allocated=n; save(); renderAll(); } };
     });
     el.querySelectorAll('[data-spend]').forEach(btn=>{
-      btn.onclick = ()=>{
-        const idx = parseInt(btn.dataset.spend);
-        const amt = prompt('Log spend for "' + state.categories[idx].name + '" (£):');
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.spend);
+        const amt = prompt(`Log spending in "${state.categories[i].name}" (£):`);
         const val = parseFloat(amt);
-        if (!isNaN(val) && val>0){ state.categories[idx].spent = Number(state.categories[idx].spent||0) + val; save(); renderAll(); }
-      };
+        if (!isNaN(val) && val>0){
+          state.categories[i].spent = Number(state.categories[i].spent||0)+val;
+          logActivity(`Spent ${fmt2(val)} on ${state.categories[i].name}`);
+          save(); renderAll();
+          toast(`${fmt2(val)} logged against ${state.categories[i].name}`);
+        } };
     });
+
+    // goals
+    document.getElementById('show-goal-form').onclick = ()=> document.getElementById('goal-form').classList.add('open');
+    document.getElementById('cancel-goal').onclick = ()=> document.getElementById('goal-form').classList.remove('open');
+    document.getElementById('save-goal').onclick = ()=>{
+      const name = document.getElementById('g-name').value.trim();
+      const target = parseFloat(document.getElementById('g-target').value)||0;
+      const saved = parseFloat(document.getElementById('g-saved').value)||0;
+      const monthly = parseFloat(document.getElementById('g-monthly').value)||0;
+      if (!name || target<=0){ toast('A goal needs a name and a target'); return; }
+      state.goals.push({ name, target, saved, monthly });
+      logActivity(`Added goal: ${name} (${fmt(target)})`);
+      save(); renderAll();
+    };
+    el.querySelectorAll('[data-goal-add]').forEach(btn=>{
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.goalAdd);
+        const amt = prompt(`Add to "${state.goals[i].name}" (£):`, state.goals[i].monthly||'');
+        const val = parseFloat(amt);
+        if (!isNaN(val) && val>0){
+          state.goals[i].saved = Number(state.goals[i].saved||0)+val;
+          logActivity(`Saved ${fmt2(val)} into ${state.goals[i].name}`);
+          save(); renderAll();
+          if (state.goals[i].saved >= state.goals[i].target) toast(`${state.goals[i].name} — target hit 🎉`);
+        } };
+    });
+    el.querySelectorAll('[data-remove-goal]').forEach(btn=>{
+      btn.onclick = ()=>{ const i=parseInt(btn.dataset.removeGoal);
+        if (confirm(`Remove the goal "${state.goals[i].name}"?`)){ state.goals.splice(i,1); save(); renderAll(); } };
+    });
+  }
+
+  // ================= MORE =================
+  function renderMore(){
+    const el = document.getElementById('view-more');
+    el.innerHTML = `
+      <div class="section"><span class="t-section">Backup &amp; data</span></div>
+      <div class="card">
+        <div class="t-help" style="margin-bottom:12px;">Everything lives on this device — nothing is sent anywhere. That's the privacy model, and it's also why backups matter: copy one out every so often.</div>
+        <div class="row2">
+          <button class="mini-btn" id="backup-copy">Copy backup</button>
+          <button class="mini-btn" id="backup-restore">Restore</button>
+        </div>
+        <div class="row2" style="margin-top:10px">
+          <button class="mini-btn" id="import-excel">Import sheet</button>
+          <button class="mini-btn" id="export-csv">Export CSV</button>
+        </div>
+        <input type="file" id="excel-file" accept=".xlsx,.xls,.csv" style="display:none"/>
+        <textarea id="backup-box" placeholder="Backup text appears here / paste here to restore" style="display:none; width:100%; margin-top:12px; background:var(--bg); border:1px solid var(--line); color:var(--text); border-radius:8px; font-family:var(--mono); font-size:12px; padding:10px; min-height:80px;"></textarea>
+        <div id="backup-msg" class="t-help" style="margin-top:10px; display:none;"></div>
+      </div>
+
+      <div class="section"><span class="t-section">Activity log</span></div>
+      <div class="card" style="padding:6px 16px;">
+        ${state.activity.length
+          ? state.activity.slice(0,40).map(a=>`<div class="activity-item"><span>${esc(a.txt)}</span><span class="t-micro">${a.d}</span></div>`).join('')
+          : '<div class="t-help" style="padding:12px 0; color:var(--text-3)">Payments, spends and changes will show up here.</div>'}
+      </div>
+
+      <div class="section"><span class="t-section">About</span></div>
+      <div class="card">
+        <div class="t-help">Runway is a private, offline-first finance tracker. No account, no bank connection, no subscription. Your figures never leave this device unless you export them yourself.</div>
+        <div class="micro" style="margin-top:10px;">Assumptions the projections make: interest compounds monthly at the stated APR; minimum payments stay fixed; when a debt clears, its minimum rolls into the attack; 0% promos revert to their stated post-promo rate on the end date.</div>
+      </div>
+    `;
+    wireBackup();
+    document.getElementById('export-csv').onclick = ()=>{
+      try {
+        let csv = 'Type,Name,Value1,Value2,Value3,Date\n';
+        state.debts.forEach(d=>{ csv += `debt,"${d.name.replace(/"/g,'""')}",${d.balance},${d.apr},${d.minPayment},\n`;
+          (d.payments||[]).forEach(p=>{ csv += `payment,"${d.name.replace(/"/g,'""')}",${p.amt},,,${p.d}\n`; }); });
+        state.categories.forEach(c=>{ csv += `category,"${c.name.replace(/"/g,'""')}",${c.allocated},${c.spent},,\n`; });
+        state.bills.forEach(b=>{ csv += `bill,"${b.name.replace(/"/g,'""')}",${b.amount},${b.dueDay||''},,\n`; });
+        state.goals.forEach(g=>{ csv += `goal,"${g.name.replace(/"/g,'""')}",${g.target},${g.saved},${g.monthly},\n`; });
+        const blob = new Blob([csv], {type:'text/csv'});
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'runway-export.csv';
+        a.click();
+        toast('CSV downloaded');
+      } catch(e){ toast('Download blocked here — use Copy backup instead'); }
+    };
+  }
+
+  function wireBackup(){
+    const box = document.getElementById('backup-box');
+    const msg = document.getElementById('backup-msg');
+    if (!box) return;
+    function note(t, ok){ msg.style.display='block'; msg.style.color = ok?'var(--sage)':'var(--clay)'; msg.textContent=t; }
+    document.getElementById('backup-copy').onclick = async ()=>{
+      const data = JSON.stringify(state);
+      box.style.display='block'; box.value=data; box.select();
+      try { await navigator.clipboard.writeText(data); note('Copied — paste it somewhere safe (notes app, message to yourself).', true); }
+      catch(e){ note('Clipboard blocked — long-press the text above and copy it manually.', false); }
+    };
+    document.getElementById('backup-restore').onclick = ()=>{
+      if (box.style.display!=='block'){ box.style.display='block'; box.value=''; box.focus(); note('Paste your backup text above, then tap Restore again.', true); return; }
+      try {
+        const parsed = JSON.parse(box.value.trim());
+        if (!parsed || typeof parsed!=='object' || !Array.isArray(parsed.debts)) throw new Error('bad');
+        state = migrate(parsed);
+        logActivity('Restored from backup');
+        save(); renderAll();
+        note('Restored.', true);
+      } catch(e){ note("That doesn't look like a valid backup — check you pasted the whole thing.", false); }
+    };
+    const fileInput = document.getElementById('excel-file');
+    document.getElementById('import-excel').onclick = ()=>{
+      if (typeof XLSX==='undefined'){ note('Spreadsheet library failed to load — check your connection and reopen.', false); return; }
+      fileInput.click();
+    };
+    fileInput.onchange = async (e)=>{
+      const file = e.target.files[0];
+      if (!file) return;
+      try {
+        const buf = await file.arrayBuffer();
+        const wb = XLSX.read(buf, {type:'array'});
+        const cleanNum = v => { if (typeof v==='number') return v; const n=parseFloat(String(v??'').replace(/[£$,%\s]/g,'')); return isNaN(n)?0:n; };
+        const norm = s => String(s??'').toLowerCase().replace(/[^a-z]/g,'');
+        const NAME_H=['name','debt','debtname','loan','account'], BAL_H=['balance','amount','owed','outstanding','remaining'],
+              APR_H=['apr','rate','interest','interestrate','aprpercent'], MIN_H=['minpayment','min','minimum','minimumpayment','monthlypayment','payment','monthly','permonth'],
+              CAT_H=['category','categoryname','budgetcategory','pot','potname'], ALLOC_H=['allocated','allocation','budget','budgeted','limit','monthlybudget'], SPENT_H=['spent','spend','used','actual'];
+        const findCol = (cells,names) => cells.findIndex(c=>names.includes(norm(c)));
+        let newDebts=[], newCats=[];
+        wb.SheetNames.forEach(sn=>{
+          const rows = XLSX.utils.sheet_to_json(wb.Sheets[sn], {header:1, defval:''});
+          let mode=null, cols={};
+          rows.forEach(r=>{
+            const nameCol=findCol(r,NAME_H), balCol=findCol(r,BAL_H), catCol=findCol(r,CAT_H), allocCol=findCol(r,ALLOC_H);
+            if (nameCol>=0 && balCol>=0){ mode='debt'; cols={name:nameCol,bal:balCol,apr:findCol(r,APR_H),min:findCol(r,MIN_H)}; return; }
+            if (catCol>=0 && allocCol>=0){ mode='cat'; cols={name:catCol,alloc:allocCol,spent:findCol(r,SPENT_H)}; return; }
+            if (!mode) return;
+            const label = String(r[cols.name]??'').trim();
+            if (!label) return;
+            if (norm(label).startsWith('total')){ mode=null; return; }
+            if (mode==='debt'){
+              const bal = cleanNum(r[cols.bal]);
+              if (bal>0) newDebts.push({ name:label, balance:bal, original:bal, apr:cols.apr>=0?cleanNum(r[cols.apr]):0, minPayment:cols.min>=0?cleanNum(r[cols.min]):0, payments:[], promoEnd:null, postPromoApr:null });
+            } else {
+              const alloc = cleanNum(r[cols.alloc]);
+              if (alloc>0) newCats.push({ name:label, allocated:alloc, spent:cols.spent>=0?cleanNum(r[cols.spent]):0 });
+            }
+          });
+        });
+        if (!newDebts.length && !newCats.length){ note('No recognisable rows. Debts need Name + Balance columns; budget rows need Category + Allocated.', false); fileInput.value=''; return; }
+        const replace = (state.debts.length||state.categories.length)
+          ? confirm(`Found ${newDebts.length} debt(s) and ${newCats.length} categorie(s).\n\nOK = REPLACE existing data\nCancel = ADD to existing data`)
+          : true;
+        if (replace){ if (newDebts.length) state.debts=newDebts; if (newCats.length) state.categories=newCats; }
+        else { state.debts=state.debts.concat(newDebts); state.categories=state.categories.concat(newCats); }
+        logActivity(`Imported ${newDebts.length} debts, ${newCats.length} categories from spreadsheet`);
+        save(); renderAll();
+        const msg2 = document.getElementById('backup-msg');
+        if (msg2){ msg2.style.display='block'; msg2.style.color='var(--sage)'; msg2.textContent=`Imported ${newDebts.length} debt(s), ${newCats.length} categorie(s) from ${file.name}.`; }
+      } catch(err){ note("Could not read that file — make sure it's a valid .xlsx or .csv.", false); }
+      fileInput.value='';
+    };
   }
 
   function renderAll(){
     if (!loaded) return;
-    renderRunway();
-    renderOverview();
+    updateStorageBadge();
+    renderHome();
+    renderPlan();
     renderDebts();
     renderBudget();
+    renderMore();
   }
 
   load();
